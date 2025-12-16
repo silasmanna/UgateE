@@ -334,8 +334,8 @@ const KYCVerificationForm = () => {
           >
             <Text style={styles.userTypeBadgeText}>
               {userType === "pharmacist"
-                ? "🏥 Licensed Pharmacy"
-                : "🏪 Patent Medicine Vendor"}
+                ? "🏥 Licensed Pharmacist"
+                : "🏪Patent Medicine Vendor"}
             </Text>
           </View>
         </View>
