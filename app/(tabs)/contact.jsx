@@ -196,15 +196,15 @@ const HelpCenterScreen = () => {
     {
       id: "1",
       label: "Call Us",
-      value: "+234 800 123 4567",
+      value: "+234 803 856 4903",
       icon: Phone,
       color: "#4CAF50",
-      action: () => Linking.openURL("tel:+2348001234567"),
+      action: () => Linking.openURL("tel:+2348038564903"),
     },
     {
       id: "2",
       label: "Email Us",
-      value: "support@egatee.com",
+      value: "service@allwecure.com",
       icon: Mail,
       color: "#2196F3",
       action: () => Linking.openURL("mailto:support@egatee.com"),
