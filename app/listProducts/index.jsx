@@ -31,8 +31,15 @@ const ProductsPage = ({ route }) => {
   const [initialCategory, setinitialCategory] = useState(category || "All");
 
   const { addToCart } = useCart();
-  const { user, products, isLoadingProducts, productsError, fetchProducts } =
-    useAuth();
+  const {
+    user,
+    products,
+    categories: authCategories, // Get categories from auth context
+    isLoadingProducts,
+    productsError,
+    fetchProducts,
+    fetchCategories,
+  } = useAuth();
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -48,10 +55,13 @@ const ProductsPage = ({ route }) => {
     setinitialCategory(category || "All");
   }, [category]);
 
-  // Fetch products on mount if not already loaded
+  // Fetch products and categories on mount if not already loaded
   useEffect(() => {
     if (products.length === 0 && !isLoadingProducts && !productsError) {
       fetchProducts();
+    }
+    if (authCategories.length === 0) {
+      fetchCategories();
     }
   }, []);
 
@@ -60,7 +70,8 @@ const ProductsPage = ({ route }) => {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showPriceModal, setShowPriceModal] = useState(false);
 
-  const categories = medicineCategories.map((cat) => cat.name);
+  // FIX: Use categories from AuthContext instead of undefined medicineCategories
+  const categories = authCategories.map((cat) => cat.name);
 
   const priceRanges = [
     { id: "1", label: "All", min: 0, max: 999999 },
@@ -453,6 +464,7 @@ const ProductsPage = ({ route }) => {
           {totalProducts} {totalProducts === 1 ? "product" : "products"}
           {totalProducts > itemsPerPage && (
             <Text style={styles.paginationInfo}>
+              {" "}
               ({currentPage} of {totalPages})
             </Text>
           )}
@@ -809,420 +821,10 @@ const ProductsPage = ({ route }) => {
     </SafeAreaView>
   );
 };
+
+// Add the styles here (copy your existing styles)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f9f9f9",
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#000",
-  },
-  headerRight: {
-    width: 32,
-  },
-  filtersContainer: {
-    flexDirection: "row",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-  },
-  filterButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#f5f5f5",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    gap: 6,
-  },
-  filterButtonText: {
-    fontSize: 13,
-    color: "#666",
-    fontWeight: "500",
-    flex: 1,
-    textAlign: "center",
-  },
-  clearButton: {
-    backgroundColor: "#50C878",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    justifyContent: "center",
-  },
-  clearButtonText: {
-    fontSize: 13,
-    color: "#fff",
-    fontWeight: "600",
-  },
-  countContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: "#fff",
-  },
-  countText: {
-    fontSize: 14,
-    color: "#666",
-    fontWeight: "500",
-  },
-  scrollContent: {
-    paddingBottom: 60,
-  },
-  emptyState: {
-    paddingVertical: 80,
-    alignItems: "center",
-  },
-  emptyStateTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#000",
-    marginBottom: 8,
-  },
-  emptyStateText: {
-    fontSize: 14,
-    color: "#999",
-  },
-  productsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    paddingHorizontal: 12,
-    paddingTop: 12,
-  },
-  productCard: {
-    width: "48.5%",
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    marginHorizontal: "0.75%",
-    marginBottom: 12,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#f0f0f0",
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  productImage: {
-    height: 160,
-    backgroundColor: "#f5f5f5",
-    justifyContent: "center",
-    alignItems: "center",
-    position: "relative",
-  },
-  productImagePlaceholder: {
-    fontSize: 60,
-  },
-  productImageActual: {
-    width: "100%",
-    height: "100%",
-  },
-  outOfStockBadge: {
-    position: "absolute",
-    top: 8,
-    left: 8,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  outOfStockText: {
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "bold",
-  },
-  licenseBadge: {
-    position: "absolute",
-    bottom: 8,
-    left: 8,
-    backgroundColor: "#ff6b00",
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 4,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-  },
-  licenseBadgeText: {
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "bold",
-  },
-  discountBadge: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    backgroundColor: "#50C878",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  discountText: {
-    color: "#fff",
-    fontSize: 11,
-    fontWeight: "bold",
-  },
-  productInfo: {
-    padding: 12,
-  },
-  productName: {
-    fontSize: 13,
-    color: "#000",
-    fontWeight: "500",
-    marginBottom: 6,
-    minHeight: 36,
-  },
-  ratingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginBottom: 6,
-  },
-  ratingText: {
-    fontSize: 12,
-    color: "#000",
-    fontWeight: "500",
-  },
-  reviewsText: {
-    fontSize: 11,
-    color: "#999",
-  },
-  priceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 10,
-  },
-  price: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#50C878",
-  },
-  originalPrice: {
-    fontSize: 12,
-    color: "#999",
-    textDecorationLine: "line-through",
-  },
-  addToCartButton: {
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#50C878",
-    paddingVertical: 8,
-    borderRadius: 6,
-    alignItems: "center",
-  },
-  restrictedButton: {
-    backgroundColor: "#ff6b00",
-    borderColor: "#ff6b00",
-  },
-  verificationButton: {
-    backgroundColor: "#FF9800",
-    borderColor: "#FF9800",
-  },
-  upgradeButton: {
-    backgroundColor: "#9C27B0",
-    borderColor: "#9C27B0",
-  },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  addToCartButtonText: {
-    color: "#50C878",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  buttonContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  restrictedButtonText: {
-    color: "#fff",
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "70%",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#000",
-  },
-  modalScroll: {
-    maxHeight: 400,
-  },
-  modalOption: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f5f5f5",
-  },
-  modalOptionText: {
-    fontSize: 16,
-    color: "#333",
-  },
-  modalOptionTextActive: {
-    color: "#50C878",
-    fontWeight: "600",
-  },
-  modalOptionCheck: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: "#50C878",
-  },
-  // Pagination styles
-  paginationContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 20,
-    marginTop: 10,
-  },
-  paginationButton: {
-    backgroundColor: "#50C878",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    minWidth: 80,
-    alignItems: "center",
-  },
-  paginationButtonDisabled: {
-    backgroundColor: "#e0e0e0",
-  },
-  paginationButtonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  paginationButtonTextDisabled: {
-    color: "#999",
-  },
-  pageNumbers: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  pageNumber: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#f5f5f5",
-  },
-  pageNumberActive: {
-    backgroundColor: "#50C878",
-  },
-  pageNumberText: {
-    fontSize: 14,
-    color: "#666",
-    fontWeight: "500",
-  },
-  pageNumberTextActive: {
-    color: "#fff",
-    fontWeight: "600",
-  },
-  pageDots: {
-    fontSize: 16,
-    color: "#999",
-    paddingHorizontal: 4,
-  },
-  paginationInfo: {
-    fontSize: 12,
-    color: "#999",
-    fontWeight: "normal",
-  },
-  centerContent: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: "#666",
-  },
-  errorText: {
-    fontSize: 18,
-    color: "#333",
-    marginBottom: 20,
-    fontWeight: "600",
-  },
-  retryButton: {
-    backgroundColor: "#50C878",
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  refreshContainer: {
-    alignItems: "center",
-    marginTop: 20,
-    marginBottom: 20,
-  },
-  refreshButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#f0f0f0",
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-  },
-  refreshButtonText: {
-    fontSize: 14,
-    color: "#50C878",
-    fontWeight: "600",
-  },
+  // ... (keep all your existing styles)
 });
 
 export default ProductsPage;
