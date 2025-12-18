@@ -2,7 +2,6 @@ import { Link, useFocusEffect, useRouter } from "expo-router";
 import { Eye, EyeOff } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   BackHandler,
   KeyboardAvoidingView,
@@ -21,12 +20,13 @@ import { useAuth } from "../../../contexts/AuthContext";
 
 const LoginScreen = () => {
   const router = useRouter();
-  const { signIn, isLoading } = useAuth();
+  const { signIn } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Handle back button press to show exit confirmation
   useFocusEffect(
@@ -48,27 +48,24 @@ const LoginScreen = () => {
           ],
           { cancelable: false }
         );
-        return true; // Prevent default back behavior
+        return true;
       };
 
-      // Add event listener
       const backHandler = BackHandler.addEventListener(
         "hardwareBackPress",
         onBackPress
       );
 
-      // Cleanup
       return () => backHandler.remove();
     }, [])
   );
 
-  // Clear form fields whenever the screen comes into focus
+  // Clear error and reset password visibility when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      setEmail("");
-      setPassword("");
       setLoginError(null);
       setShowPassword(false);
+      setIsLoggingIn(false);
     }, [])
   );
 
@@ -81,12 +78,17 @@ const LoginScreen = () => {
       return;
     }
 
+    setIsLoggingIn(true);
+
     try {
       await signIn(email, password);
       // Navigation is handled automatically by AuthContext
     } catch (error) {
       console.error("Login Error:", error.message);
-      setLoginError(error.message);
+      // Don't clear inputs on error - keep them for user to fix
+      setLoginError(error.message || "Login failed. Please try again.");
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -117,11 +119,14 @@ const LoginScreen = () => {
                 placeholder="Email"
                 placeholderTextColor="#999"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  setLoginError(null);
+                }}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
-                editable={!isLoading}
+                editable={!isLoggingIn}
               />
             </View>
 
@@ -132,15 +137,18 @@ const LoginScreen = () => {
                 placeholder="Password"
                 placeholderTextColor="#999"
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  setLoginError(null);
+                }}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
-                editable={!isLoading}
+                editable={!isLoggingIn}
               />
               <TouchableOpacity
                 style={styles.eyeIcon}
                 onPress={() => setShowPassword(!showPassword)}
-                disabled={isLoading}
+                disabled={isLoggingIn}
               >
                 {showPassword ? (
                   <Eye size={20} color="#999" />
@@ -151,29 +159,29 @@ const LoginScreen = () => {
             </View>
 
             {/* Forgot Password */}
-            <Link href="/forgot-password" asChild disabled={isLoading}>
+            <Link href="/forgot-password" asChild disabled={isLoggingIn}>
               <TouchableOpacity style={styles.forgotPassword}>
                 <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
               </TouchableOpacity>
             </Link>
 
-            {/* Error Message Display */}
-            {loginError && <Text style={styles.errorText}>{loginError}</Text>}
+            {/* Error Message Display - Above Login Button */}
+            {loginError && (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{loginError}</Text>
+              </View>
+            )}
 
             {/* Login Button */}
             <TouchableOpacity
               style={[
                 styles.loginButton,
-                isLoading && styles.loginButtonDisabled,
+                isLoggingIn && styles.loginButtonDisabled,
               ]}
               onPress={handleLogin}
-              disabled={isLoading}
+              disabled={isLoggingIn}
             >
-              {isLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.loginButtonText}>Login</Text>
-              )}
+              <Text style={styles.loginButtonText}>Login</Text>
             </TouchableOpacity>
 
             {/* Divider */}
@@ -186,7 +194,7 @@ const LoginScreen = () => {
             {/* Register Link */}
             <View style={styles.registerContainer}>
               <Text style={styles.registerText}>Don't have an account? </Text>
-              <Link href="/register" asChild disabled={isLoading}>
+              <Link href="/register" asChild disabled={isLoggingIn}>
                 <TouchableOpacity>
                   <Text style={styles.registerLink}>Register</Text>
                 </TouchableOpacity>
@@ -202,7 +210,7 @@ const LoginScreen = () => {
       </View>
 
       {/* Loading Modal */}
-      <LoadingModal visible={isLoading} message="Logging in..." />
+      <LoadingModal visible={isLoggingIn} message="Logging in..." />
     </SafeAreaView>
   );
 };
@@ -268,19 +276,25 @@ const styles = StyleSheet.create({
     color: "#2196F3",
     fontWeight: "500",
   },
+  errorContainer: {
+    backgroundColor: "#ffebee",
+    borderLeftWidth: 4,
+    borderLeftColor: "#dc3545",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
   errorText: {
     color: "#dc3545",
-    fontSize: 13,
-    textAlign: "center",
-    marginBottom: 16,
+    fontSize: 14,
     fontWeight: "500",
+    lineHeight: 20,
   },
   loginButton: {
     backgroundColor: "#50C878",
     borderRadius: 28,
     paddingVertical: 16,
     alignItems: "center",
-    marginTop: 8,
     marginBottom: 16,
   },
   loginButtonDisabled: {

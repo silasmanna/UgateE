@@ -826,8 +826,6 @@ export function AuthProvider({ children }) {
   // SIGN IN LOGIC
   const role = "BUYER";
   const signIn = async (email, password) => {
-    setIsLoading(true);
-
     try {
       console.log("🔐 Signing in to:", LOGIN_API_URL);
       const response = await fetch(LOGIN_API_URL, {
@@ -849,20 +847,24 @@ export function AuthProvider({ children }) {
       ) {
         console.log("📧 Email not verified - redirecting to OTP screen");
 
-        setIsLoading(false);
         await new Promise((resolve) => setTimeout(resolve, 100));
 
-        router.push({
+        router.replace({
           pathname: "/verify-otp",
           params: { email: email },
         });
 
-        return;
+        // Throw error to show message in login screen
+        throw new Error(
+          "Email not verified. Please verify your email to continue."
+        );
       }
 
       if (!response.ok || !result.success) {
         const errorMessage =
-          result.message || result.error || "Login failed. Check credentials.";
+          result.message ||
+          result.error ||
+          "Login failed. Please check your credentials.";
         throw new Error(errorMessage);
       }
 
@@ -920,9 +922,9 @@ export function AuthProvider({ children }) {
         // Fetch products and categories after login
         fetchCategories();
         fetchProducts();
-        fetchOrders(); // Fetch orders after login
+        fetchOrders();
 
-        router.push("/(tabs)");
+        router.replace("/(tabs)");
         return;
       }
 
@@ -954,7 +956,7 @@ export function AuthProvider({ children }) {
       // Fetch products and categories after login
       fetchCategories();
       fetchProducts();
-      fetchOrders(); // Fetch orders after login
+      fetchOrders();
 
       await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -963,8 +965,6 @@ export function AuthProvider({ children }) {
       console.error("❌ Sign In Error:", error.message);
       setUser(null);
       throw error;
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -1038,11 +1038,11 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // --- REGISTER LOGIC ---
+  // REGISTER LOGIC
   const register = async (registrationData) => {
-    setIsLoading(true);
     try {
-      console.log("📝 Registering...");
+      console.log("📝 Starting registration process...");
+      console.log("📍 API URL:", REGISTER_API_URL);
 
       const requestBody = {
         name: registrationData.name,
@@ -1063,42 +1063,72 @@ export function AuthProvider({ children }) {
       if (registrationData.lga) {
         requestBody.lga = registrationData.lga;
       }
+      if (registrationData.referral_code) {
+        requestBody.referral_code = registrationData.referral_code;
+      }
 
-      console.log("📤 Request body:", requestBody);
+      console.log("📤 Request body:", JSON.stringify(requestBody, null, 2));
 
-      const response = await fetch(REGISTER_API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
-      });
+      let response;
+      try {
+        console.log("🌐 Making network request...");
+        response = await fetch(REGISTER_API_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify(requestBody),
+        });
+        console.log("✅ Network request completed");
+        console.log("📊 Response status:", response.status);
+        console.log("📊 Response ok:", response.ok);
+      } catch (fetchError) {
+        console.error("❌ Network request failed:", fetchError);
+        console.error("❌ Error name:", fetchError.name);
+        console.error("❌ Error message:", fetchError.message);
+        throw new Error(
+          "Network request failed. Please check your internet connection and try again."
+        );
+      }
 
-      const result = await response.json();
-      console.log("📦 Registration response:", JSON.stringify(result, null, 2));
+      let result;
+      try {
+        const responseText = await response.text();
+        console.log("📝 Raw response:", responseText);
+
+        if (!responseText) {
+          throw new Error("Empty response from server");
+        }
+
+        result = JSON.parse(responseText);
+        console.log("📦 Parsed response:", JSON.stringify(result, null, 2));
+      } catch (parseError) {
+        console.error("❌ Failed to parse response:", parseError);
+        throw new Error("Invalid response from server. Please try again.");
+      }
 
       if (!response.ok || !result.success) {
         const errorMessage =
           result.message ||
           result.error ||
-          "Registration failed. Please try again.";
+          result.errors?.[0]?.message ||
+          `Registration failed with status ${response.status}`;
+        console.error("❌ Registration failed:", errorMessage);
         throw new Error(errorMessage);
       }
 
-      console.log(
-        "✅ Registration successful - redirecting to OTP verification"
-      );
+      console.log("✅ Registration successful");
 
-      // DO NOT fetch tokens or profile - go straight to OTP screen
-      router.push({
-        pathname: "/verify-otp",
-        params: { email: registrationData.email },
-      });
+      // Return success with email so RegisterScreen can handle navigation
+      return {
+        success: true,
+        email: registrationData.email,
+      };
     } catch (error) {
       console.error("❌ Registration Error:", error.message);
+      console.error("❌ Error stack:", error.stack);
       throw error;
-    } finally {
-      setIsLoading(false);
     }
   };
 

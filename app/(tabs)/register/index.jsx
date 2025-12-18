@@ -21,6 +21,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import LoadingModal from "../../../components/loadingModal";
 
 import { useAuth } from "../../../contexts/AuthContext";
 
@@ -48,6 +49,9 @@ const RegisterScreen = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [address, setAddress] = useState("");
 
+  // Optional referral code
+  const [referralCode, setReferralCode] = useState("");
+
   // Regular User Fields
   const [name, setName] = useState("");
 
@@ -66,7 +70,6 @@ const RegisterScreen = () => {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const isBusinessUser = buyerType === "patent" || buyerType === "pharmacist";
-
   const handleSubmit = async () => {
     setRegisterError(null);
 
@@ -81,6 +84,21 @@ const RegisterScreen = () => {
     // 1. Client-Side Validation - Common Fields
     if (!email || !password || !confirmPassword || !phone || !address) {
       setRegisterError("All required fields must be filled out.");
+      return;
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setRegisterError("Please enter a valid email address.");
+      return;
+    }
+
+    // Phone validation
+    if (phone.length < 10) {
+      setRegisterError(
+        "Please enter a valid phone number (at least 10 digits)."
+      );
       return;
     }
 
@@ -102,39 +120,90 @@ const RegisterScreen = () => {
       return;
     }
 
-    if (password.length < 6) {
-      setRegisterError("Password must be at least 6 characters.");
+    if (password.length < 8) {
+      setRegisterError("Password must be at least 8 characters.");
+      return;
+    }
+
+    // Password strength validation
+    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/.test(password)) {
+      setRegisterError(
+        "Password must contain uppercase, lowercase, number, and special character (@$!%*?&)."
+      );
       return;
     }
 
     setIsSigningUp(true);
 
     try {
+      console.log("🚀 Starting registration...");
+
       // Prepare registration data based on buyer type
       const registrationData = {
-        email,
-        phone,
+        email: email.trim().toLowerCase(),
+        phone: phone.trim(),
         password,
-        address,
+        address: address.trim(),
         account_tier: buyerType.toUpperCase(),
       };
 
-      // Add fields specific to buyer type
-      if (isBusinessUser) {
-        registrationData.name = businessName;
-        registrationData.contact_person = contactPerson;
-        registrationData.state = state;
-        registrationData.lga = lga;
-      } else {
-        registrationData.name = name;
+      // Include referral code if provided
+      if (referralCode.trim()) {
+        registrationData.referral_code = referralCode.trim();
       }
 
-      console.log("📤 Sending registration data:", registrationData);
+      // Add fields specific to buyer type
+      if (isBusinessUser) {
+        registrationData.name = businessName.trim();
+        registrationData.contact_person = contactPerson.trim();
+        registrationData.state = state.trim();
+        registrationData.lga = lga.trim();
+      } else {
+        registrationData.name = name.trim();
+      }
 
-      await register(registrationData);
+      console.log("📤 Registration data prepared:", {
+        ...registrationData,
+        password: "***HIDDEN***",
+      });
+
+      // Call register and wait for response
+      const result = await register(registrationData);
+
+      console.log("✅ Registration completed successfully");
+
+      // Keep loading state while navigating
+      // Add small delay to ensure smooth transition
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Navigate to OTP screen with the email
+      router.replace({
+        pathname: "/verify-otp",
+        params: { email: result.email },
+      });
     } catch (error) {
-      console.error("Registration Error:", error.message);
-      setRegisterError(error.message);
+      console.error("❌ Registration Error:", error);
+
+      // More specific error messages
+      let errorMessage = error.message;
+
+      if (errorMessage.includes("Network request failed")) {
+        errorMessage =
+          "Unable to connect to server. Please check your internet connection and try again.";
+      } else if (
+        errorMessage.includes("already exists") ||
+        errorMessage.includes("duplicate")
+      ) {
+        errorMessage =
+          "An account with this email or phone number already exists.";
+      } else if (
+        errorMessage.includes("Invalid") ||
+        errorMessage.includes("validation")
+      ) {
+        errorMessage = "Please check your information and try again.";
+      }
+
+      setRegisterError(errorMessage);
     } finally {
       setIsSigningUp(false);
     }
@@ -377,6 +446,38 @@ const RegisterScreen = () => {
               </TouchableOpacity>
             </View>
 
+            {/* Referral Code Input (Optional) */}
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                placeholder="Referral Code (Optional)"
+                placeholderTextColor="#999"
+                value={referralCode}
+                onChangeText={setReferralCode}
+                autoCapitalize="characters"
+                editable={!isSigningUp}
+              />
+            </View>
+
+            <View style={styles.passwordRequirements}>
+              <Text style={styles.requirementsText}>
+                Password must contain:
+              </Text>
+              <Text style={styles.requirementItem}>
+                • At least 8 characters
+              </Text>
+              <Text style={styles.requirementItem}>
+                • Uppercase letter (A-Z)
+              </Text>
+              <Text style={styles.requirementItem}>
+                • Lowercase letter (a-z)
+              </Text>
+              <Text style={styles.requirementItem}>• Number (0-9)</Text>
+              <Text style={styles.requirementItem}>
+                • Special character (@$!%*?&)
+              </Text>
+            </View>
+
             {/* License Info for Business Users */}
             {isBusinessUser && (
               <View style={styles.infoBox}>
@@ -465,20 +566,14 @@ const RegisterScreen = () => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      {/* Bottom Indicator */}
-      <View style={styles.bottomIndicator}>
-        <View style={styles.indicatorBar} />
-      </View>
+      {/* Loading Modal */}
+      <LoadingModal visible={isSigningUp} message="Creating your account..." />
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
+  container: { flex: 1, backgroundColor: "#fff" },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -486,46 +581,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
-  backButton: {
-    padding: 4,
-  },
-  languageSelector: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  languageText: {
-    fontSize: 16,
-    color: "#000",
-    fontWeight: "500",
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 80,
-  },
-  titleContainer: {
-    alignItems: "center",
-    marginTop: 20,
-    marginBottom: 30,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#000",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#666",
-  },
-  formContainer: {
-    paddingHorizontal: 20,
-  },
-  sectionContainer: {
-    marginBottom: 24,
-  },
+  backButton: { padding: 4 },
+  languageSelector: { flexDirection: "row", alignItems: "center", gap: 4 },
+  languageText: { fontSize: 16, color: "#000", fontWeight: "500" },
+  keyboardView: { flex: 1 },
+  scrollContent: { paddingBottom: 80 },
+  titleContainer: { alignItems: "center", marginTop: 20, marginBottom: 30 },
+  title: { fontSize: 28, fontWeight: "bold", color: "#000", marginBottom: 8 },
+  subtitle: { fontSize: 16, color: "#666" },
+  formContainer: { paddingHorizontal: 20 },
+  sectionContainer: { marginBottom: 24 },
   sectionTitle: {
     fontSize: 15,
     fontWeight: "600",
@@ -533,9 +598,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     marginTop: 8,
   },
-  buyerTypeContainer: {
-    gap: 12,
-  },
+  buyerTypeContainer: { gap: 12 },
   buyerTypeCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -546,10 +609,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 12,
   },
-  buyerTypeCardActive: {
-    borderColor: "#50C878",
-    backgroundColor: "#f0fff4",
-  },
+  buyerTypeCardActive: { borderColor: "#50C878", backgroundColor: "#f0fff4" },
   radioButton: {
     width: 24,
     height: 24,
@@ -565,26 +625,16 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: "#50C878",
   },
-  buyerTypeContent: {
-    flex: 1,
-  },
+  buyerTypeContent: { flex: 1 },
   buyerTypeLabel: {
     fontSize: 16,
     fontWeight: "600",
     color: "#333",
     marginBottom: 2,
   },
-  buyerTypeLabelActive: {
-    color: "#50C878",
-  },
-  buyerTypeDescription: {
-    fontSize: 13,
-    color: "#999",
-  },
-  inputWrapper: {
-    marginBottom: 16,
-    position: "relative",
-  },
+  buyerTypeLabelActive: { color: "#50C878" },
+  buyerTypeDescription: { fontSize: 13, color: "#999" },
+  inputWrapper: { marginBottom: 16, position: "relative" },
   input: {
     backgroundColor: "#fff",
     borderWidth: 1,
@@ -595,15 +645,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#000",
   },
-  passwordInput: {
-    paddingRight: 50,
-  },
-  eyeIcon: {
-    position: "absolute",
-    right: 20,
-    top: 16,
-    padding: 4,
-  },
+  passwordInput: { paddingRight: 50 },
+  eyeIcon: { position: "absolute", right: 20, top: 16, padding: 4 },
   infoBox: {
     backgroundColor: "#e3f2fd",
     padding: 12,
@@ -612,34 +655,35 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: "#2196F3",
   },
-  infoText: {
-    fontSize: 13,
-    color: "#1976d2",
-    lineHeight: 18,
-  },
+  infoText: { fontSize: 13, color: "#1976d2", lineHeight: 18 },
   termsContainer: {
     flexDirection: "row",
     alignItems: "flex-start",
     marginBottom: 16,
     paddingVertical: 8,
   },
-  checkboxContainer: {
-    marginRight: 12,
-    marginTop: 2,
-  },
-  termsTextContainer: {
-    flex: 1,
-  },
-  termsText: {
-    fontSize: 14,
-    color: "#666",
-    lineHeight: 20,
-  },
+  checkboxContainer: { marginRight: 12, marginTop: 2 },
+  termsTextContainer: { flex: 1 },
+  termsText: { fontSize: 14, color: "#666", lineHeight: 20 },
   termsLink: {
     color: "#2196F3",
     fontWeight: "600",
     textDecorationLine: "underline",
   },
+  passwordRequirements: {
+    backgroundColor: "#f8f9fa",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    marginTop: -8,
+  },
+  requirementsText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 6,
+  },
+  requirementItem: { fontSize: 11, color: "#666", marginBottom: 2 },
   errorText: {
     color: "#dc3545",
     fontSize: 13,
@@ -655,14 +699,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 16,
   },
-  submitButtonDisabled: {
-    opacity: 0.7,
-  },
-  submitButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
+  submitButtonDisabled: { opacity: 0.7 },
+  submitButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
   loginContainer: {
     flexDirection: "row",
     justifyContent: "center",
@@ -670,15 +708,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 24,
   },
-  loginText: {
-    fontSize: 14,
-    color: "#666",
-  },
-  loginLink: {
-    fontSize: 14,
-    color: "#2196F3",
-    fontWeight: "600",
-  },
+  loginText: { fontSize: 14, color: "#666" },
+  loginLink: { fontSize: 14, color: "#2196F3", fontWeight: "600" },
   bottomIndicator: {
     position: "absolute",
     bottom: 0,

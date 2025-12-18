@@ -53,7 +53,8 @@
         {
           "android": {
             "usesCleartextTraffic": true,
-            "enableProguardInReleaseBuilds": false
+            "enableProguardInReleaseBuilds": false,
+            "enableMinifyInReleaseBuilds": false
           }
         }
       ]
@@ -65,8 +66,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "f8b6a8d7-f058-4493-a6ab-0fab9e3bcbbd"
+        "projectId": "a8ee484a-ac55-4821-9775-dafeaf1000bc"
       }
-    }
+    },
+    "owner": "mannaman"
   }
 }
