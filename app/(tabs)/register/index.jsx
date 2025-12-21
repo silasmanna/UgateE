@@ -43,6 +43,7 @@ const RegisterScreen = () => {
   const [buyerType, setBuyerType] = useState("regular");
 
   // Common Form States (for all user types)
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -52,15 +53,6 @@ const RegisterScreen = () => {
   // Optional referral code
   const [referralCode, setReferralCode] = useState("");
 
-  // Regular User Fields
-  const [name, setName] = useState("");
-
-  // Business User Fields (Patent/Pharmacy)
-  const [businessName, setBusinessName] = useState("");
-  const [contactPerson, setContactPerson] = useState("");
-  const [state, setState] = useState("");
-  const [lga, setLga] = useState("");
-
   // UI/Flow States
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -69,7 +61,6 @@ const RegisterScreen = () => {
   const [registerError, setRegisterError] = useState(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
-  const isBusinessUser = buyerType === "patent" || buyerType === "pharmacist";
   const handleSubmit = async () => {
     setRegisterError(null);
 
@@ -82,7 +73,14 @@ const RegisterScreen = () => {
     }
 
     // 1. Client-Side Validation - Common Fields
-    if (!email || !password || !confirmPassword || !phone || !address) {
+    if (
+      !name ||
+      !email ||
+      !password ||
+      !confirmPassword ||
+      !phone ||
+      !address
+    ) {
       setRegisterError("All required fields must be filled out.");
       return;
     }
@@ -100,19 +98,6 @@ const RegisterScreen = () => {
         "Please enter a valid phone number (at least 10 digits)."
       );
       return;
-    }
-
-    // Validate based on buyer type
-    if (isBusinessUser) {
-      if (!businessName || !contactPerson || !state || !lga) {
-        setRegisterError("All business fields must be filled out.");
-        return;
-      }
-    } else {
-      if (!name) {
-        setRegisterError("Name is required.");
-        return;
-      }
     }
 
     if (password !== confirmPassword) {
@@ -140,6 +125,7 @@ const RegisterScreen = () => {
 
       // Prepare registration data based on buyer type
       const registrationData = {
+        name: name.trim(),
         email: email.trim().toLowerCase(),
         phone: phone.trim(),
         password,
@@ -150,16 +136,6 @@ const RegisterScreen = () => {
       // Include referral code if provided
       if (referralCode.trim()) {
         registrationData.referral_code = referralCode.trim();
-      }
-
-      // Add fields specific to buyer type
-      if (isBusinessUser) {
-        registrationData.name = businessName.trim();
-        registrationData.contact_person = contactPerson.trim();
-        registrationData.state = state.trim();
-        registrationData.lga = lga.trim();
-      } else {
-        registrationData.name = name.trim();
       }
 
       console.log("📤 Registration data prepared:", {
@@ -282,78 +258,21 @@ const RegisterScreen = () => {
               </View>
             </View>
 
-            {/* Conditional Fields Based on Buyer Type */}
-            {isBusinessUser ? (
-              <>
-                <Text style={styles.sectionTitle}>Business Information</Text>
+            {/* Unified Information Fields for All User Types */}
+            <Text style={styles.sectionTitle}>Personal Information</Text>
 
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Business Name *"
-                    placeholderTextColor="#999"
-                    value={businessName}
-                    onChangeText={setBusinessName}
-                    autoCapitalize="words"
-                    editable={!isSigningUp}
-                  />
-                </View>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                placeholder="Full Name *"
+                placeholderTextColor="#999"
+                value={name}
+                onChangeText={setName}
+                autoCapitalize="words"
+                editable={!isSigningUp}
+              />
+            </View>
 
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Contact Person *"
-                    placeholderTextColor="#999"
-                    value={contactPerson}
-                    onChangeText={setContactPerson}
-                    autoCapitalize="words"
-                    editable={!isSigningUp}
-                  />
-                </View>
-
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="State *"
-                    placeholderTextColor="#999"
-                    value={state}
-                    onChangeText={setState}
-                    autoCapitalize="words"
-                    editable={!isSigningUp}
-                  />
-                </View>
-
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="LGA (Local Government Area) *"
-                    placeholderTextColor="#999"
-                    value={lga}
-                    onChangeText={setLga}
-                    autoCapitalize="words"
-                    editable={!isSigningUp}
-                  />
-                </View>
-              </>
-            ) : (
-              <>
-                <Text style={styles.sectionTitle}>Personal Information</Text>
-
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Full Name *"
-                    placeholderTextColor="#999"
-                    value={name}
-                    onChangeText={setName}
-                    autoCapitalize="words"
-                    editable={!isSigningUp}
-                  />
-                </View>
-              </>
-            )}
-
-            {/* Common Fields for All User Types */}
             <Text style={styles.sectionTitle}>Contact Details</Text>
 
             <View style={styles.inputWrapper}>
@@ -477,19 +396,6 @@ const RegisterScreen = () => {
                 • Special character (@$!%*?&)
               </Text>
             </View>
-
-            {/* License Info for Business Users */}
-            {isBusinessUser && (
-              <View style={styles.infoBox}>
-                <Text style={styles.infoText}>
-                  ℹ️ As a{" "}
-                  {buyerType === "patent"
-                    ? "Patent Medicine Vendor"
-                    : "Pharmacy"}
-                  , you'll have access to purchase prescription medications.
-                </Text>
-              </View>
-            )}
 
             {/* Terms and Conditions Checkbox */}
             <TouchableOpacity
@@ -647,15 +553,6 @@ const styles = StyleSheet.create({
   },
   passwordInput: { paddingRight: 50 },
   eyeIcon: { position: "absolute", right: 20, top: 16, padding: 4 },
-  infoBox: {
-    backgroundColor: "#e3f2fd",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    borderLeftWidth: 3,
-    borderLeftColor: "#2196F3",
-  },
-  infoText: { fontSize: 13, color: "#1976d2", lineHeight: 18 },
   termsContainer: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -710,22 +607,6 @@ const styles = StyleSheet.create({
   },
   loginText: { fontSize: 14, color: "#666" },
   loginLink: { fontSize: 14, color: "#2196F3", fontWeight: "600" },
-  bottomIndicator: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 34,
-    backgroundColor: "#fff",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  indicatorBar: {
-    width: 100,
-    height: 4,
-    backgroundColor: "#e0e0e0",
-    borderRadius: 2,
-  },
 });
 
 export default RegisterScreen;

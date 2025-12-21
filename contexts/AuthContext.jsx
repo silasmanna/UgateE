@@ -453,6 +453,7 @@ export function AuthProvider({ children }) {
   };
 
   // Fetch Products (Requires auth)
+
   const fetchProducts = async () => {
     try {
       setIsLoadingProducts(true);
@@ -496,10 +497,6 @@ export function AuthProvider({ children }) {
 
       // Transform API products to app format
       const transformedProducts = result.data.map((product) => {
-        // Debug logging for the first product
-        if (result.data.indexOf(product) === 0) {
-        }
-
         // Safely extract category name
         let categoryName = "Uncategorized";
         if (
@@ -527,18 +524,21 @@ export function AuthProvider({ children }) {
               : null,
           inStock: product.inStock,
           stockCount: product.stockCount,
-          sold: product.sold,
-          brand: product.brand,
+          sold: product.sold || 0,
+          brand: product.brand || "",
           sku: product.sku,
           accessLevel: product.accessLevel,
           meta: product.meta,
           category: categoryName,
           rating: 4.5,
           reviews: product.sold || 0,
+          createdAt: product.createdAt,
+          updatedAt: product.updatedAt,
         };
       });
 
       setProducts(transformedProducts);
+      console.log(`✅ Fetched ${transformedProducts.length} products`);
     } catch (error) {
       console.error("❌ Error fetching products:", error);
       setProductsError(error.message);
@@ -610,6 +610,7 @@ export function AuthProvider({ children }) {
         sku: product.sku,
         accessLevel: product.accessLevel,
         meta: product.meta,
+        expiryDate: product.expiry_date,
         category: product.categories[0].name,
         rating: 4.5,
         reviews: product.sold || 0,

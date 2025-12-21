@@ -25,7 +25,9 @@ const mapApiOrderToLocalOrder = (apiOrder) => {
   // Map paymentStatus to a simplified display status
   const statusMapping = {
     PENDING: "Unpaid",
-    COMPLETED: "Completed",
+    PROCESSING: "Unreceived",
+    SHIPPED: "Shipped",
+    DELIVERED: "Completed",
     // Add other API statuses as needed
   };
 
@@ -85,13 +87,7 @@ const OrdersScreen = () => {
     }
   };
 
-  const orderStatuses = [
-    "All",
-    "Unpaid",
-    "Unshipped",
-    "Unreceived",
-    "Completed",
-  ];
+  const orderStatuses = ["All", "Unpaid", "Shipped", "Unreceived", "Completed"];
   const dateRanges = [
     "All Time",
     "Last 7 Days",
@@ -139,7 +135,7 @@ const OrdersScreen = () => {
     switch (status) {
       case "Unpaid":
         return "#FF5252";
-      case "Unshipped":
+      case "Shipped":
         return "#FF9800";
       case "Unreceived":
         return "#2196F3";
@@ -154,7 +150,7 @@ const OrdersScreen = () => {
     switch (status) {
       case "Unpaid":
         return "#FFEBEE";
-      case "Unshipped":
+      case "Shipped":
         return "#FFF3E0";
       case "Unreceived":
         return "#E3F2FD";
@@ -529,13 +525,13 @@ const OrdersScreen = () => {
                   </View>
                   <View style={styles.orderModalRow}>
                     <Text style={styles.orderModalLabel}>Shipping</Text>
-                    <Text style={styles.orderModalValue}>₦1,500</Text>
+                    <Text style={styles.orderModalValue}>Free</Text>
                   </View>
                   <View style={styles.divider} />
                   <View style={styles.orderModalRow}>
                     <Text style={styles.orderModalLabelBold}>Total</Text>
                     <Text style={styles.orderModalTotalValue}>
-                      {formatPrice(selectedOrder.total + 1500)}
+                      {formatPrice(selectedOrder.total)}
                     </Text>
                   </View>
                 </View>

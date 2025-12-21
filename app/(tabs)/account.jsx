@@ -7,11 +7,9 @@ import {
   HelpCircle,
   Lock,
   LogOut,
-  MapPin,
   MessageCircle,
   Package,
   RefreshCw,
-  Settings,
   Shield,
   ShieldCheck,
 } from "lucide-react-native";
@@ -32,6 +30,7 @@ import KYCVerificationModal from "../../components/KYCVerificationModal";
 import LoadingModal from "../../components/loadingModal";
 import { useAuth } from "../../contexts/AuthContext";
 import EditProfileModal from ".././editprofile";
+import ContactModal from "../contact";
 import { getCurrentUser } from "../utils/api";
 
 const UserProfileDashboard = () => {
@@ -44,6 +43,7 @@ const UserProfileDashboard = () => {
   const [showKYCModal, setShowKYCModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
 
   // State for user data from API
   const [userData, setUserData] = useState(null);
@@ -191,7 +191,6 @@ const UserProfileDashboard = () => {
         { id: "1", label: "Edit Profile", icon: Edit, color: "#2196F3" },
         { id: "2", label: "My Orders", icon: Package, color: "#4CAF50" },
         { id: "3", label: "Change Password", icon: Lock, color: "#FF9800" }, // NEW
-        { id: "5", label: "Saved Addresses", icon: MapPin, color: "#9C27B0" },
       ],
     },
     {
@@ -352,12 +351,12 @@ const UserProfileDashboard = () => {
           >
             <RefreshCw size={20} color={isLoadingProfile ? "#999" : "#000"} />
           </TouchableOpacity>
-          <TouchableOpacity
+          {/* <TouchableOpacity
             style={styles.settingsButton}
             onPress={() => handleMenuPress({ label: "Settings" })}
           >
             <Settings size={24} color="#000" />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
       </View>
 
@@ -606,6 +605,11 @@ const UserProfileDashboard = () => {
         visible={showEditModal}
         onClose={() => setShowEditModal(false)}
         onSuccess={handleProfileUpdated}
+      />
+      {/* Contact Us Modal */}
+      <ContactModal
+        visible={showContactModal}
+        onClose={() => setShowContactModal(false)}
       />
       {/* NEW: Change Password Modal */}
       <ChangePasswordModal

@@ -107,7 +107,9 @@ const LoginScreen = () => {
           {/* Logo/Title */}
           <View style={styles.titleContainer}>
             <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Sign in to continue</Text>
+            <Text style={styles.subtitle}>
+              Login to your existing AllWeCure account
+            </Text>
           </View>
 
           {/* Form */}

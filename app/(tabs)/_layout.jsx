@@ -45,12 +45,12 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="explore"
+        name="cart"
         options={{
-          title: "Categories",
+          title: "Cart",
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
-              name={focused ? "apps" : "apps-outline"}
+              name={focused ? "cart" : "cart-outline"}
               size={26}
               color={color}
             />
@@ -101,9 +101,9 @@ export default function TabLayout() {
       />
 
       {/* Hidden from tab bar */}
-      <Tabs.Screen name="cart" options={{ href: null }} />
       <Tabs.Screen name="login" options={{ href: null }} />
       <Tabs.Screen name="register" options={{ href: null }} />
+      <Tabs.Screen name="explore" options={{ href: null }} />
     </Tabs>
   );
 }

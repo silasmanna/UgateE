@@ -17,6 +17,7 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -40,6 +41,8 @@ const ProductDetail = () => {
 
   const [product, setProduct] = useState(null);
   const [quantity, setQuantity] = useState(1);
+  const [quantityInput, setQuantityInput] = useState("1");
+  const [isEditingQuantity, setIsEditingQuantity] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isGoingBack, setIsGoingBack] = useState(false);
   const [isAddingToCart, setIsAddingToCart] = useState(false);
@@ -52,6 +55,7 @@ const ProductDetail = () => {
     const foundProduct = findProductById(productId, products);
     setProduct(foundProduct);
     setQuantity(1);
+    setQuantityInput("1");
     setLoading(false);
   }, [productId, products]); // Add products to dependency array
 
@@ -184,19 +188,55 @@ const ProductDetail = () => {
   }, [isGoingBack]);
 
   const incrementQuantity = () => {
-    setIsUpdatingQuantity(true);
-    setTimeout(() => {
-      setQuantity((q) => q + 1);
-      setIsUpdatingQuantity(false);
-    }, 500);
+    const maxStock = product?.stockCount || 999;
+    setQuantity((q) => {
+      const newQuantity = Math.min(q + 1, maxStock);
+      setQuantityInput(newQuantity.toString());
+      return newQuantity;
+    });
   };
 
   const decrementQuantity = () => {
-    setIsUpdatingQuantity(true);
-    setTimeout(() => {
-      setQuantity((q) => Math.max(1, q - 1));
-      setIsUpdatingQuantity(false);
-    }, 500);
+    setQuantity((q) => {
+      const newQuantity = Math.max(1, q - 1);
+      setQuantityInput(newQuantity.toString());
+      return newQuantity;
+    });
+  };
+
+  const handleQuantityInputChange = (text) => {
+    // Only allow numbers
+    const numericText = text.replace(/[^0-9]/g, "");
+    setQuantityInput(numericText);
+  };
+
+  const handleQuantityInputFocus = () => {
+    setIsEditingQuantity(true);
+  };
+
+  const handleQuantityInputBlur = () => {
+    setIsEditingQuantity(false);
+
+    // Validate and update quantity
+    const numValue = parseInt(quantityInput, 10);
+    const maxStock = product?.stockCount || 999;
+
+    if (isNaN(numValue) || numValue < 1) {
+      // Reset to 1 if invalid
+      setQuantity(1);
+      setQuantityInput("1");
+    } else if (numValue > maxStock) {
+      // Cap at max stock
+      setQuantity(maxStock);
+      setQuantityInput(maxStock.toString());
+      Alert.alert(
+        "Stock Limit",
+        `Only ${maxStock} units available. Quantity set to maximum.`
+      );
+    } else {
+      // Valid input
+      setQuantity(numValue);
+    }
   };
 
   // UPDATED ADD TO CART HANDLER
@@ -261,10 +301,12 @@ const ProductDetail = () => {
     }
 
     setIsAddingToCart(true);
-    setTimeout(() => {
-      addToCart(product, quantity);
-      setIsAddingToCart(false);
 
+    // Add to cart immediately, no delay
+    addToCart(product, quantity);
+
+    setTimeout(() => {
+      setIsAddingToCart(false);
       Alert.alert(
         "Added to Cart",
         `${quantity} ${quantity === 1 ? "item" : "items"} added to your cart.`,
@@ -277,9 +319,9 @@ const ProductDetail = () => {
         ]
       );
       setQuantity(1);
-    }, 1000);
+      setQuantityInput("1");
+    }, 500);
   }, [product, quantity, addToCart, user]);
-
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
@@ -487,6 +529,9 @@ const ProductDetail = () => {
         <View style={styles.detailsCard}>
           <Text style={styles.productName}>{product.name}</Text>
           <Text style={styles.skuText}>SKU: {product.sku}</Text>
+          <Text style={styles.expiryText}>
+            Expiry Date: {product.expiry_date}
+          </Text>
 
           <View style={styles.ratingRow}>
             <View style={styles.starsContainer}>
@@ -538,44 +583,58 @@ const ProductDetail = () => {
           </View>
 
           <View style={styles.divider} />
-
+          {/* Quantity Section */}
           <View style={styles.quantitySection}>
             <Text style={styles.quantityLabel}>Quantity</Text>
-            <View style={styles.quantityControl}>
-              <TouchableOpacity
-                style={[
-                  styles.quantityButton,
-                  (isUpdatingQuantity || hasRestriction) &&
-                    styles.disabledButton,
-                ]}
-                onPress={decrementQuantity}
-                disabled={isUpdatingQuantity || hasRestriction}
-              >
-                {isUpdatingQuantity ? (
-                  <ActivityIndicator size={20} color="#50C878" />
-                ) : (
+            <View style={styles.quantityControlWrapper}>
+              <View style={styles.quantityControl}>
+                <TouchableOpacity
+                  style={[
+                    styles.quantityButton,
+                    hasRestriction && styles.disabledButton,
+                  ]}
+                  onPress={decrementQuantity}
+                  disabled={hasRestriction}
+                >
                   <Minus
                     size={20}
                     color={hasRestriction ? "#ccc" : "#50C878"}
                   />
-                )}
-              </TouchableOpacity>
-              <Text style={styles.quantityText}>{quantity}</Text>
-              <TouchableOpacity
-                style={[
-                  styles.quantityButton,
-                  (isUpdatingQuantity || hasRestriction) &&
-                    styles.disabledButton,
-                ]}
-                onPress={incrementQuantity}
-                disabled={isUpdatingQuantity || hasRestriction}
-              >
-                {isUpdatingQuantity ? (
-                  <ActivityIndicator size={20} color="#50C878" />
-                ) : (
+                </TouchableOpacity>
+
+                <TextInput
+                  style={[
+                    styles.quantityInputField,
+                    isEditingQuantity && styles.quantityInputActive,
+                    hasRestriction && styles.quantityInputDisabled,
+                  ]}
+                  value={quantityInput}
+                  onChangeText={handleQuantityInputChange}
+                  onFocus={handleQuantityInputFocus}
+                  onBlur={handleQuantityInputBlur}
+                  keyboardType="number-pad"
+                  maxLength={product?.stockCount?.toString().length || 3}
+                  selectTextOnFocus={true}
+                  editable={!hasRestriction}
+                />
+
+                <TouchableOpacity
+                  style={[
+                    styles.quantityButton,
+                    hasRestriction && styles.disabledButton,
+                  ]}
+                  onPress={incrementQuantity}
+                  disabled={hasRestriction}
+                >
                   <Plus size={20} color={hasRestriction ? "#ccc" : "#50C878"} />
-                )}
-              </TouchableOpacity>
+                </TouchableOpacity>
+              </View>
+
+              {product?.stockCount && (
+                <Text style={styles.stockLimitText}>
+                  Max: {product.stockCount}
+                </Text>
+              )}
             </View>
           </View>
         </View>
@@ -677,11 +736,6 @@ const ProductDetail = () => {
       <LoadingModal
         visible={isAddingToCart}
         message="Adding medication to cart..."
-      />
-
-      <LoadingModal
-        visible={isUpdatingQuantity}
-        message="Updating quantity..."
       />
 
       {/* KYC Verification Modal */}
@@ -795,6 +849,52 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "bold",
   },
+  quantitySection: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  quantityLabel: {
+    fontSize: 15,
+    color: "#000",
+    fontWeight: "600",
+    paddingTop: 8,
+  },
+  quantityControlWrapper: {
+    alignItems: "flex-end",
+  },
+  quantityControl: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  quantityInputField: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#000",
+    minWidth: 60,
+    textAlign: "center",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#fff",
+  },
+  quantityInputActive: {
+    borderColor: "#50C878",
+    borderWidth: 2,
+  },
+  quantityInputDisabled: {
+    backgroundColor: "#f5f5f5",
+    color: "#999",
+  },
+  stockLimitText: {
+    fontSize: 11,
+    color: "#999",
+    marginTop: 4,
+  },
+
   outOfStockBadge: {
     position: "absolute",
     top: 16,
@@ -903,6 +1003,11 @@ const styles = StyleSheet.create({
   skuText: {
     fontSize: 13,
     color: "#999",
+    marginBottom: 12,
+  },
+  expiryText: {
+    fontSize: 13,
+    color: "#000",
     marginBottom: 12,
   },
   ratingRow: {

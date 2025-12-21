@@ -1,198 +1,151 @@
-import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider,
-} from "@react-navigation/native";
-import { Stack, useRouter, useSegments } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import { useEffect, useRef } from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
-import "react-native-reanimated";
-import { CartProvider } from "../contexts/cartContext";
-
+import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { AuthProvider, useAuth } from "../contexts/AuthContext";
+import { Ionicons } from "@expo/vector-icons";
+import { Tabs, usePathname } from "expo-router";
+import { useEffect, useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
+import { useCart } from "../contexts/cartContext";
 
-// Helper component to show while the initial auth check is running
-function LoadingScreen() {
-  return (
-    <View style={styles.loadingContainer}>
-      <ActivityIndicator size="large" color="#0000ff" />
-    </View>
-  );
-}
-
-// Initial layout component that forces login as first screen
-function RootLayoutNav() {
+export default function TabLayout() {
   const colorScheme = useColorScheme();
-  const { user, isLoading } = useAuth();
-  const segments = useSegments();
-  const router = useRouter();
+  const pathname = usePathname();
+  const [isTabBarVisible, setIsTabBarVisible] = useState(true);
+  const { cartItems } = useCart();
 
-  // ✅ Add a ref to track if we're in the middle of an OTP flow
-  const isNavigatingToOTP = useRef(false);
+  // Calculate total items in cart
+  const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
-  // The authentication check is already correct
-  const isAuthenticated = user !== null && user?.accessToken;
-
+  // Hide tab bar on specific routes
   useEffect(() => {
-    // 1. Don't do anything while loading initial auth state
-    if (isLoading) {
-      return;
-    }
-
-    // Determine if the current route is one of the public (auth) routes
-    const inAuthGroup =
-      segments[0] === "(tabs)" &&
-      (segments[1] === "login" || segments[1] === "register");
-
-    // ✅ Updated list of public screens defined outside the (tabs) group
-    const publicRoutes = [
-      "index",
-      "forgot-password",
-      "reset-password",
-      "verify-otp",
-      "privacy",
-      "terms",
-      "returns",
-    ];
-    const isPublicRoute = publicRoutes.includes(segments[0]);
-
-    // ✅ If on any public route, don't redirect
-    if (isPublicRoute) {
-      return;
-    }
-
-    if (!isAuthenticated && !inAuthGroup && !isPublicRoute) {
-      // User not logged in and not on a public screen -> redirect to login
-      setTimeout(() => {
-        router.replace("/(tabs)/login");
-      }, 0);
-    } else if (isAuthenticated && (inAuthGroup || isPublicRoute)) {
-      // User logged in but on a public screen -> redirect to tabs
-      // ✅ But don't redirect if we're navigating to OTP
-      if (!isNavigatingToOTP.current) {
-        router.replace("/(tabs)");
-      }
-    }
-  }, [user, segments, isLoading, isAuthenticated]);
-
-  // Show loading indicator during initial authentication check
-  if (isLoading) {
-    return <LoadingScreen />;
-  }
+    const hiddenRoutes = ["/login", "/register", "/listProducts", "/state"];
+    const shouldHide = hiddenRoutes.some((route) => pathname.includes(route));
+    setIsTabBarVisible(!shouldHide);
+  }, [pathname]);
 
   return (
-    <CartProvider>
-      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-          }}
-        >
-          {/* PUBLIC ROUTES - Define these first */}
-          <Stack.Screen
-            name="index"
-            options={{
-              headerShown: false,
-            }}
-          />
-          <Stack.Screen
-            name="forgot-password"
-            options={{
-              headerShown: false,
-            }}
-          />
-          <Stack.Screen
-            name="reset-password"
-            options={{
-              headerShown: false,
-              gestureEnabled: false,
-            }}
-          />
-          {/* ✅ verify-otp screen */}
-          <Stack.Screen
-            name="verify-otp"
-            options={{
-              headerShown: false,
-              // ✅ Prevent gesture-based back navigation
-              gestureEnabled: false,
-            }}
-          />
-          {/* ✅ Policy/Legal Routes */}
-          <Stack.Screen
-            name="privacy"
-            options={{
-              headerShown: false,
-            }}
-          />
-          <Stack.Screen
-            name="terms"
-            options={{
-              headerShown: false,
-            }}
-          />
-          <Stack.Screen
-            name="returns"
-            options={{
-              headerShown: false,
-            }}
-          />
-          {/* PROTECTED/TAB ROUTES */}
-          <Stack.Screen
-            name="(tabs)"
-            options={{
-              headerShown: false,
-            }}
-          />
-          <Stack.Screen
-            name="listProducts"
-            options={{
-              headerShown: false,
-            }}
-          />
-          <Stack.Screen
-            name="product"
-            options={{
-              headerShown: false,
-              presentation: "card",
-              animation: "slide_from_right",
-            }}
-          />
-          <Stack.Screen
-            name="kyc-verification"
-            options={{
-              headerShown: false,
-            }}
-          />
-          <Stack.Screen
-            name="modal"
-            options={{
-              presentation: "modal",
-              title: "Modal",
-              headerShown: true,
-            }}
-          />
-        </Stack>
-        <StatusBar style="auto" />
-      </ThemeProvider>
-    </CartProvider>
+    <Tabs
+      screenOptions={{
+        tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
+        headerShown: false,
+        tabBarStyle: isTabBarVisible
+          ? {
+              display: "flex",
+            }
+          : {
+              display: "none",
+            },
+      }}
+    >
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: "Home",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "home" : "home-outline"}
+              size={26}
+              color={color}
+            />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="cart"
+        options={{
+          title: "Cart",
+          tabBarIcon: ({ color, focused }) => (
+            <View style={styles.iconContainer}>
+              <Ionicons
+                name={focused ? "cart" : "cart-outline"}
+                size={26}
+                color={color}
+              />
+              {cartCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>
+                    {cartCount > 99 ? "99+" : cartCount}
+                  </Text>
+                </View>
+              )}
+            </View>
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="contact"
+        options={{
+          title: "Contact",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "call" : "call-outline"}
+              size={26}
+              color={color}
+            />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="notice"
+        options={{
+          title: "Notification",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "notifications" : "notifications-outline"}
+              size={26}
+              color={color}
+            />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="account"
+        options={{
+          title: "Account",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              name={focused ? "person" : "person-outline"}
+              size={26}
+              color={color}
+            />
+          ),
+        }}
+      />
+
+      {/* Hidden from tab bar */}
+      <Tabs.Screen name="login" options={{ href: null }} />
+      <Tabs.Screen name="register" options={{ href: null }} />
+      <Tabs.Screen name="explore" options={{ href: null }} />
+    </Tabs>
   );
 }
 
 const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
+  iconContainer: {
+    width: 26,
+    height: 26,
+    position: "relative",
+  },
+  badge: {
+    position: "absolute",
+    right: -8,
+    top: -4,
+    backgroundColor: "#e91e63",
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#fff",
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  badgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "bold",
   },
 });
-
-export default function RootLayout() {
-  return (
-    <AuthProvider>
-      <RootLayoutNav />
-    </AuthProvider>
-  );
-}

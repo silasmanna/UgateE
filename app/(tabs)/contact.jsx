@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   ChevronDown,
   ChevronRight,
   ChevronUp,
@@ -234,9 +233,6 @@ const HelpCenterScreen = () => {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton}>
-          <ArrowLeft size={24} color="#000" />
-        </TouchableOpacity>
         <Text style={styles.headerTitle}>Help Center</Text>
         <View style={styles.headerRight} />
       </View>
@@ -259,31 +255,6 @@ const HelpCenterScreen = () => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Quick Actions */}
-        {!searchQuery && (
-          <View style={styles.quickActionsSection}>
-            <Text style={styles.sectionTitle}>Quick Help</Text>
-            <View style={styles.quickActionsGrid}>
-              {quickActions.map((action) => (
-                <TouchableOpacity
-                  key={action.id}
-                  style={styles.quickActionCard}
-                >
-                  <View
-                    style={[
-                      styles.quickActionIcon,
-                      { backgroundColor: action.color + "20" },
-                    ]}
-                  >
-                    <action.icon size={24} color={action.color} />
-                  </View>
-                  <Text style={styles.quickActionLabel}>{action.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-
         {/* FAQ Categories */}
         <View style={styles.faqSection}>
           <Text style={styles.sectionTitle}>

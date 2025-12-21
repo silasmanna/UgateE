@@ -35,6 +35,15 @@ const MedicineHomepage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
+  const [selectedFilter, setSelectedFilter] = useState("Home");
+
+  const filterTabs = [
+    { id: "Home", label: "Home", icon: "🏠" },
+    { id: "Popular", label: "Popular", icon: "🔥" },
+    { id: "Sales", label: "Sales", icon: "💰" },
+    { id: "Brand", label: "Brand", icon: "⭐" },
+    { id: "New", label: "New", icon: "✨" },
+  ];
   // Loading states
   const [isCategoryLoading, setIsCategoryLoading] = useState(false);
   const [isViewAllLoading, setIsViewAllLoading] = useState(false);
@@ -42,6 +51,61 @@ const MedicineHomepage = () => {
   const [loadingProductName, setLoadingProductName] = useState("");
   const [addingProductId, setAddingProductId] = useState(null);
   const [showKYCModal, setShowKYCModal] = useState(false);
+
+  const getFilteredProducts = (products) => {
+    let filtered = [...products];
+
+    switch (selectedFilter) {
+      case "Popular":
+        // Sort by sold count (high to low)
+        filtered = filtered.sort((a, b) => (b.sold || 0) - (a.sold || 0));
+        break;
+
+      case "Sales":
+        // Show only products with discount > 0
+        filtered = filtered.filter((p) => p.discount && p.discount > 0);
+        // Sort by discount percentage (high to low)
+        filtered = filtered.sort(
+          (a, b) => (b.discount || 0) - (a.discount || 0)
+        );
+        break;
+
+      case "Brand":
+        // Group by brand, then sort by sold count within each brand
+        filtered = filtered.filter((p) => p.brand && p.brand.trim() !== "");
+        filtered = filtered.sort((a, b) => {
+          // First sort by brand name
+          if (a.brand < b.brand) return -1;
+          if (a.brand > b.brand) return 1;
+          // Then by sold count within same brand
+          return (b.sold || 0) - (a.sold || 0);
+        });
+        break;
+
+      case "New":
+        // Sort by createdAt date (newest first)
+        filtered = filtered.sort((a, b) => {
+          const dateA = new Date(a.createdAt || 0);
+          const dateB = new Date(b.createdAt || 0);
+          return dateB - dateA;
+        });
+        // Optionally, filter to show only products from the last 30 days
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        filtered = filtered.filter((p) => {
+          if (!p.createdAt) return true; // Include products without date
+          return new Date(p.createdAt) >= thirtyDaysAgo;
+        });
+        break;
+
+      case "Home":
+      default:
+        // Default sorting - no specific filter
+        break;
+    }
+
+    return filtered;
+  };
 
   const { addToCart } = useCart();
   const {
@@ -85,12 +149,15 @@ const MedicineHomepage = () => {
       ? products
       : products.filter((product) => product.category === selectedCategory);
 
+  // Apply filter tab sorting
+  const filterTabProducts = getFilteredProducts(categoryFilteredProducts);
+
   // Then filter by search query
   const filteredProducts = searchQuery.trim()
-    ? categoryFilteredProducts.filter((product) =>
+    ? filterTabProducts.filter((product) =>
         product.name.toLowerCase().includes(searchQuery.toLowerCase().trim())
       )
-    : categoryFilteredProducts;
+    : filterTabProducts;
 
   // Pagination calculations
   const totalProducts = filteredProducts.length;
@@ -378,6 +445,38 @@ const MedicineHomepage = () => {
             </TouchableOpacity>
           )}
         </View>
+      </View>
+      {/* Filter Tabs */}
+      <View style={styles.filterTabsContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterTabsContent}
+        >
+          {filterTabs.map((tab) => (
+            <TouchableOpacity
+              key={tab.id}
+              style={[
+                styles.filterTab,
+                selectedFilter === tab.id && styles.filterTabActive,
+              ]}
+              onPress={() => setSelectedFilter(tab.id)}
+            >
+              <Text style={styles.filterTabIcon}>{tab.icon}</Text>
+              <Text
+                style={[
+                  styles.filterTabText,
+                  selectedFilter === tab.id && styles.filterTabTextActive,
+                ]}
+              >
+                {tab.label}
+              </Text>
+              {selectedFilter === tab.id && (
+                <View style={styles.filterTabIndicator} />
+              )}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
       <ScrollView
@@ -790,6 +889,53 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 14,
     color: "#000",
+  },
+  filterTabsContainer: {
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+    paddingVertical: 8,
+  },
+  filterTabsContent: {
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  filterTab: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: "#f5f5f5",
+    gap: 6,
+    position: "relative",
+  },
+  filterTabActive: {
+    backgroundColor: "#e8f5e9",
+    borderWidth: 1,
+    borderColor: "#50C878",
+  },
+  filterTabIcon: {
+    fontSize: 16,
+  },
+  filterTabText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#666",
+  },
+  filterTabTextActive: {
+    color: "#50C878",
+    fontWeight: "700",
+  },
+  filterTabIndicator: {
+    position: "absolute",
+    bottom: -9,
+    left: "50%",
+    marginLeft: -4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#50C878",
   },
   scrollContent: {
     paddingBottom: 20,
