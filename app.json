@@ -30,12 +30,14 @@
       "permissions": [
         "INTERNET",
         "ACCESS_NETWORK_STATE",
-        "ACCESS_WIFI_STATE",
-        "INTERNET",
-        "ACCESS_NETWORK_STATE",
         "ACCESS_WIFI_STATE"
       ],
-      "usesCleartextTraffic": true
+      "usesCleartextTraffic": true,
+      "splits": {
+        "abi": {
+          "enable": true
+        }
+      }
     },
     "web": {
       "output": "static",
