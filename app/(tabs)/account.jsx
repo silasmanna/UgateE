@@ -16,7 +16,6 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
-  Linking,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -269,6 +268,11 @@ const UserProfileDashboard = () => {
       setShowChangePasswordModal(true);
       return;
     }
+    // ✅ NEW: Special handling for Contact us - open modal directly
+    if (item.label === "Contact Us") {
+      setShowContactModal(true);
+      return;
+    }
     setIsLoading(true);
     setLoadingMessage(`Loading...`);
 
@@ -278,7 +282,6 @@ const UserProfileDashboard = () => {
           router.push("/notice");
           break;
         case "Help Center":
-        case "Contact Us":
           router.push("/contact");
           break;
         case "Saved Addresses":
@@ -292,7 +295,7 @@ const UserProfileDashboard = () => {
           break;
       }
       setIsLoading(false);
-    }, 500);
+    }, 100);
   };
 
   // Handler for orders card press
@@ -304,19 +307,6 @@ const UserProfileDashboard = () => {
 
     setTimeout(() => {
       router.push("/notice");
-      setIsLoading(false);
-    }, 500);
-  };
-
-  // Handler for seller button press
-  const handleSellerPress = () => {
-    if (isLoading) return;
-
-    setIsLoading(true);
-    setLoadingMessage("Opening seller portal...");
-
-    setTimeout(() => {
-      Linking.openURL("https://www.test.com");
       setIsLoading(false);
     }, 500);
   };
@@ -351,12 +341,6 @@ const UserProfileDashboard = () => {
           >
             <RefreshCw size={20} color={isLoadingProfile ? "#999" : "#000"} />
           </TouchableOpacity>
-          {/* <TouchableOpacity
-            style={styles.settingsButton}
-            onPress={() => handleMenuPress({ label: "Settings" })}
-          >
-            <Settings size={24} color="#000" />
-          </TouchableOpacity> */}
         </View>
       </View>
 

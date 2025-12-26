@@ -3,12 +3,15 @@ import {
   Calendar,
   ChevronDown,
   Filter,
-  RefreshCw, // Added this import
+  MessageSquare,
+  RefreshCw,
   X,
 } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Image,
   Modal,
   ScrollView,
   StatusBar,
@@ -20,15 +23,14 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
 
-// Helper function to map AuthContext order data to the component's expected format
+// Helper function updated to include buyerNote
 const mapApiOrderToLocalOrder = (apiOrder) => {
-  // Map paymentStatus to a simplified display status
   const statusMapping = {
     PENDING: "Unpaid",
-    PROCESSING: "Unreceived",
+    PROCESSING: "Processing",
     SHIPPED: "Shipped",
     DELIVERED: "Completed",
-    // Add other API statuses as needed
+    CANCELLED: "Cancelled",
   };
 
   const status =
@@ -36,20 +38,16 @@ const mapApiOrderToLocalOrder = (apiOrder) => {
     apiOrder.paymentStatus ||
     apiOrder.status;
 
-  // CRUCIAL FIX: Implement better fallback for item names (since API name:"" is common)
   const productsList = (apiOrder.items || []).map((item) => {
-    // Check if item.name is a non-empty string.
     if (item.name && item.name.trim().length > 0) {
       return item.name;
     }
-    // Fallback: Use product ID/item ID if name is empty
     return item.productId
       ? `Product ID: ${item.productId}`
       : `Item ID: ${item.itemId || "Unknown"}`;
   });
 
   return {
-    // Use the cleaned/transformed data passed from AuthContext (which should have 'id', 'date', 'total')
     id: apiOrder.id,
     date: apiOrder.date,
     total: apiOrder.total,
@@ -57,12 +55,14 @@ const mapApiOrderToLocalOrder = (apiOrder) => {
     items: (apiOrder.items || []).length,
     products: productsList,
     fullItems: apiOrder.items || [],
+    buyerNote: apiOrder.buyerNote || null,
+    shippingAddress: apiOrder.shippingAddress || null,
   };
 };
 
 const OrdersScreen = () => {
-  // Destructure orders, loading, error, and fetch function from AuthContext
-  const { orders, isLoadingOrders, ordersError, fetchOrders } = useAuth();
+  const { orders, isLoadingOrders, ordersError, fetchOrders, cancelOrder } =
+    useAuth();
 
   const [selectedFilter, setSelectedFilter] = useState("All");
   const [selectedDateRange, setSelectedDateRange] = useState("All Time");
@@ -70,14 +70,13 @@ const OrdersScreen = () => {
   const [showDateModal, setShowDateModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false); // Added this state
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
 
-  // Fetch orders on component mount
   useEffect(() => {
     fetchOrders();
   }, []);
 
-  // Added this function to handle manual refresh
   const handleRefreshOrders = async () => {
     setIsRefreshing(true);
     try {
@@ -87,7 +86,49 @@ const OrdersScreen = () => {
     }
   };
 
-  const orderStatuses = ["All", "Unpaid", "Shipped", "Unreceived", "Completed"];
+  const handleCancelOrder = (orderId) => {
+    Alert.alert(
+      "Cancel Order",
+      "Are you sure you want to cancel this order? This action cannot be undone.",
+      [
+        {
+          text: "No, Keep Order",
+          style: "cancel",
+        },
+        {
+          text: "Yes, Cancel Order",
+          style: "destructive",
+          onPress: async () => {
+            setIsCancelling(true);
+            try {
+              const result = await cancelOrder(orderId);
+              setShowOrderModal(false);
+              Alert.alert(
+                "Success",
+                result.message || "Order cancelled successfully"
+              );
+            } catch (error) {
+              Alert.alert(
+                "Error",
+                error.message || "Failed to cancel order. Please try again."
+              );
+            } finally {
+              setIsCancelling(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const orderStatuses = [
+    "All",
+    "Unpaid",
+    "Shipped",
+    "Processing",
+    "Completed",
+    "Cancelled",
+  ];
   const dateRanges = [
     "All Time",
     "Last 7 Days",
@@ -96,22 +137,17 @@ const OrdersScreen = () => {
     "Last 6 Months",
   ];
 
-  // Map orders from AuthContext into the local display format
   const allOrders = orders ? orders.map(mapApiOrderToLocalOrder) : [];
 
-  // Filter orders based on selected filters
   const filteredOrders = allOrders.filter((order) => {
-    // 1. Status Filter
     if (selectedFilter !== "All" && order.status !== selectedFilter) {
       return false;
     }
 
-    // 2. Date range filtering
-    if (!order.date) return true; // Skip filtering if date is missing
+    if (!order.date) return true;
 
     const orderDate = new Date(order.date);
     const now = new Date();
-    // Calculate difference in days
     const diffDays = Math.floor(
       (now.getTime() - orderDate.getTime()) / (1000 * 60 * 60 * 24)
     );
@@ -122,25 +158,26 @@ const OrdersScreen = () => {
       case "Last 30 Days":
         return diffDays <= 30;
       case "Last 3 Months":
-        return diffDays <= 90; // Approx 3 months
+        return diffDays <= 90;
       case "Last 6 Months":
-        return diffDays <= 180; // Approx 6 months
+        return diffDays <= 180;
       default:
         return true;
     }
   });
 
-  // --- Helper Functions ---
   const getStatusColor = (status) => {
     switch (status) {
       case "Unpaid":
         return "#FF5252";
       case "Shipped":
         return "#FF9800";
-      case "Unreceived":
+      case "Processing":
         return "#2196F3";
       case "Completed":
         return "#4CAF50";
+      case "Cancelled":
+        return "#000";
       default:
         return "#999";
     }
@@ -152,9 +189,11 @@ const OrdersScreen = () => {
         return "#FFEBEE";
       case "Shipped":
         return "#FFF3E0";
-      case "Unreceived":
+      case "Processing":
         return "#E3F2FD";
       case "Completed":
+        return "#E8F5E9";
+      case "Cancelled":
         return "#E8F5E9";
       default:
         return "#F5F5F5";
@@ -162,7 +201,6 @@ const OrdersScreen = () => {
   };
 
   const formatPrice = (price) => {
-    // Check if price is a valid number before formatting
     const numericPrice = typeof price === "number" && !isNaN(price) ? price : 0;
     return `₦${numericPrice.toLocaleString()}`;
   };
@@ -192,7 +230,14 @@ const OrdersScreen = () => {
     console.log("Navigate to Contact Us with order:", selectedOrder);
   };
 
-  // --- Render Logic ---
+  // Helper to get first image from item
+  const getItemImage = (item) => {
+    if (item.images && Array.isArray(item.images) && item.images.length > 0) {
+      return item.images[0];
+    }
+    return null;
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <StatusBar barStyle="dark-content" />
@@ -226,7 +271,6 @@ const OrdersScreen = () => {
           <ChevronDown size={16} color="#666" />
         </TouchableOpacity>
 
-        {/* Added refresh button */}
         <TouchableOpacity
           style={[styles.filterButton, styles.refreshButton]}
           onPress={handleRefreshOrders}
@@ -288,7 +332,6 @@ const OrdersScreen = () => {
                   ]}
                   onPress={() => handleOrderClick(order)}
                 >
-                  {/* Order Header */}
                   <View style={styles.orderHeader}>
                     <View>
                       <Text style={styles.orderId}>{order.id}</Text>
@@ -317,7 +360,43 @@ const OrdersScreen = () => {
                     </View>
                   </View>
 
-                  {/* Order Details */}
+                  {/* Product Images Preview */}
+                  {order.fullItems && order.fullItems.length > 0 && (
+                    <View style={styles.productImagesPreview}>
+                      {order.fullItems.slice(0, 3).map((item, index) => {
+                        const imageUrl = getItemImage(item);
+                        return (
+                          <View
+                            key={item.itemId || index}
+                            style={[
+                              styles.productImageWrapper,
+                              index > 0 && { marginLeft: -8 },
+                            ]}
+                          >
+                            {imageUrl ? (
+                              <Image
+                                source={{ uri: imageUrl }}
+                                style={styles.productImagePreview}
+                                resizeMode="cover"
+                              />
+                            ) : (
+                              <View style={styles.productImagePlaceholder}>
+                                <Text style={styles.placeholderEmoji}>💊</Text>
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })}
+                      {order.fullItems.length > 3 && (
+                        <View style={styles.moreImagesIndicator}>
+                          <Text style={styles.moreImagesText}>
+                            +{order.fullItems.length - 3}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
                   <View style={styles.orderDetails}>
                     <Text style={styles.orderItems}>
                       {order.items} {order.items === 1 ? "item" : "items"}
@@ -327,7 +406,6 @@ const OrdersScreen = () => {
                     </Text>
                   </View>
 
-                  {/* Order Footer */}
                   <View style={styles.orderFooter}>
                     <Text style={styles.totalLabel}>Total:</Text>
                     <Text style={styles.totalAmount}>
@@ -479,30 +557,86 @@ const OrdersScreen = () => {
                   </View>
                 </View>
 
-                {/* Products */}
+                {/* Shipping Address */}
+                {selectedOrder.shippingAddress && (
+                  <View style={styles.orderModalSection}>
+                    <Text style={styles.orderModalSectionTitle}>
+                      Shipping Address
+                    </Text>
+                    <View style={styles.addressContainer}>
+                      <Text style={styles.addressText}>
+                        {selectedOrder.shippingAddress}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Buyer Note */}
+                {selectedOrder.buyerNote && (
+                  <View style={styles.orderModalSection}>
+                    <Text style={styles.orderModalSectionTitle}>
+                      Buyer's Note
+                    </Text>
+                    <View style={styles.buyerNoteContainer}>
+                      <MessageSquare
+                        size={16}
+                        color="#666"
+                        style={styles.noteIcon}
+                      />
+                      <Text style={styles.buyerNoteText}>
+                        {selectedOrder.buyerNote}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Products with Images */}
                 <View style={styles.orderModalSection}>
                   <Text style={styles.orderModalSectionTitle}>Products</Text>
-                  {/* Now we use the fullItems array for detailed product view */}
                   {selectedOrder.fullItems &&
-                    selectedOrder.fullItems.map((item, index) => (
-                      <View
-                        key={item.itemId || index}
-                        style={styles.productItem}
-                      >
-                        <Text style={styles.productBullet}>•</Text>
-                        <Text style={styles.productName}>
-                          {/* Use the item name or a robust fallback */}
-                          {item.name && item.name.trim().length > 0
-                            ? item.name
-                            : item.productId
-                            ? `Product ID: ${item.productId}`
-                            : `Item ID: ${item.itemId || "Unknown"}`}
-                        </Text>
-                        <Text style={styles.orderModalValue}>
-                          {formatPrice(item.total)}
-                        </Text>
-                      </View>
-                    ))}
+                    selectedOrder.fullItems.map((item, index) => {
+                      const imageUrl = getItemImage(item);
+                      return (
+                        <View
+                          key={item.itemId || index}
+                          style={styles.productItemDetailed}
+                        >
+                          {/* Product Image */}
+                          <View style={styles.productImageContainer}>
+                            {imageUrl ? (
+                              <Image
+                                source={{ uri: imageUrl }}
+                                style={styles.productImage}
+                                resizeMode="cover"
+                              />
+                            ) : (
+                              <View style={styles.productImagePlaceholderLarge}>
+                                <Text style={styles.placeholderEmojiLarge}>
+                                  💊
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+
+                          {/* Product Details */}
+                          <View style={styles.productInfo}>
+                            <Text style={styles.productNameDetailed}>
+                              {item.name && item.name.trim().length > 0
+                                ? item.name
+                                : item.productId
+                                ? `Product ID: ${item.productId}`
+                                : `Item ID: ${item.itemId || "Unknown"}`}
+                            </Text>
+                            <Text style={styles.productQuantity}>
+                              Qty: {item.quantity} × {formatPrice(item.price)}
+                            </Text>
+                            <Text style={styles.productTotal}>
+                              {formatPrice(item.total)}
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    })}
                 </View>
 
                 {/* Order Summary */}
@@ -536,20 +670,40 @@ const OrdersScreen = () => {
                   </View>
                 </View>
 
-                {/* Need Help Section */}
-                <View style={[styles.orderModalSection, styles.helpSection]}>
-                  <Text style={styles.helpTitle}>
-                    Need help with this order?
-                  </Text>
-                  <Text style={styles.helpText}>
-                    Contact our support team for assistance with your order
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.contactUsButton}
-                    onPress={handleContactUs}
-                  >
-                    <Text style={styles.contactUsButtonText}>Contact Us</Text>
-                  </TouchableOpacity>
+                {/* Action Buttons Section */}
+                <View style={[styles.orderModalSection, styles.actionsSection]}>
+                  {selectedOrder.status !== "Cancelled" &&
+                    selectedOrder.status !== "Completed" &&
+                    selectedOrder.status !== "Shipped" && (
+                      <TouchableOpacity
+                        style={styles.cancelOrderButton}
+                        onPress={() => handleCancelOrder(selectedOrder.id)}
+                        disabled={isCancelling}
+                      >
+                        {isCancelling ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Text style={styles.cancelOrderButtonText}>
+                            Cancel Order
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
+
+                  <View style={styles.helpSectionInline}>
+                    <Text style={styles.helpTitle}>
+                      Need help with this order?
+                    </Text>
+                    <Text style={styles.helpText}>
+                      Contact our support team for assistance
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.contactUsButton}
+                      onPress={handleContactUs}
+                    >
+                      <Text style={styles.contactUsButtonText}>Contact Us</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </ScrollView>
             )}
@@ -560,7 +714,6 @@ const OrdersScreen = () => {
   );
 };
 
-// --- Styles (Updated with refresh button style) ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -587,6 +740,26 @@ const styles = StyleSheet.create({
   headerRight: {
     width: 32,
   },
+  actionsSection: {
+    marginBottom: 20,
+  },
+  cancelOrderButton: {
+    backgroundColor: "#FF5252",
+    paddingVertical: 14,
+    borderRadius: 28,
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  cancelOrderButtonText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  helpSectionInline: {
+    backgroundColor: "#f9f9f9",
+    padding: 16,
+    borderRadius: 12,
+  },
   filtersContainer: {
     flexDirection: "row",
     paddingHorizontal: 16,
@@ -605,9 +778,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     gap: 6,
   },
-  // Added style for refresh button
   refreshButton: {
-    flex: 0.8, // Make it slightly smaller than the other buttons
+    flex: 0.8,
   },
   filterButtonText: {
     fontSize: 13,
@@ -670,6 +842,50 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   statusText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  // Product Images Preview Styles
+  productImagesPreview: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  productImageWrapper: {
+    borderWidth: 2,
+    borderColor: "#fff",
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  productImagePreview: {
+    width: 48,
+    height: 48,
+    borderRadius: 6,
+  },
+  productImagePlaceholder: {
+    width: 48,
+    height: 48,
+    backgroundColor: "#f5f5f5",
+    borderRadius: 6,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  placeholderEmoji: {
+    fontSize: 24,
+  },
+  moreImagesIndicator: {
+    width: 48,
+    height: 48,
+    backgroundColor: "#e91e63",
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: -8,
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  moreImagesText: {
+    color: "#fff",
     fontSize: 12,
     fontWeight: "600",
   },
@@ -840,32 +1056,69 @@ const styles = StyleSheet.create({
     color: "#000",
     marginBottom: 12,
   },
-  productItem: {
+  // Detailed Product Item with Image
+  productItemDetailed: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 8,
+    backgroundColor: "#f9f9f9",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
   },
-  productBullet: {
-    fontSize: 16,
-    color: "#666",
-    marginRight: 8,
+  productImageContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 8,
+    overflow: "hidden",
+    marginRight: 12,
   },
-  productName: {
+  productImage: {
+    width: "100%",
+    height: "100%",
+  },
+  productImagePlaceholderLarge: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#f5f5f5",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  placeholderEmojiLarge: {
+    fontSize: 32,
+  },
+  productInfo: {
     flex: 1,
+    justifyContent: "space-between",
+  },
+  productNameDetailed: {
     fontSize: 14,
-    color: "#333",
+    color: "#000",
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  productQuantity: {
+    fontSize: 12,
+    color: "#666",
+    marginBottom: 4,
+  },
+  productTotal: {
+    fontSize: 14,
+    color: "#e91e63",
+    fontWeight: "bold",
+  },
+  addressContainer: {
+    backgroundColor: "#f9f9f9",
+    padding: 12,
+    borderRadius: 8,
+  },
+  addressText: {
+    fontSize: 14,
+    color: "#444",
+    lineHeight: 20,
   },
   divider: {
     height: 1,
     backgroundColor: "#f0f0f0",
     marginVertical: 8,
-  },
-  helpSection: {
-    backgroundColor: "#f9f9f9",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 20,
   },
   helpTitle: {
     fontSize: 16,
@@ -889,6 +1142,24 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 15,
     fontWeight: "600",
+  },
+  buyerNoteContainer: {
+    flexDirection: "row",
+    backgroundColor: "#f0f0f0",
+    padding: 12,
+    borderRadius: 8,
+    alignItems: "flex-start",
+  },
+  noteIcon: {
+    marginTop: 2,
+    marginRight: 8,
+  },
+  buyerNoteText: {
+    flex: 1,
+    fontSize: 14,
+    color: "#444",
+    fontStyle: "italic",
+    lineHeight: 20,
   },
 });
 

@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -15,33 +15,25 @@ import { useAuth } from "../contexts/AuthContext";
 export default function Index() {
   const router = useRouter();
   const { user, isLoading } = useAuth();
-  const [isNavigating, setIsNavigating] = useState(false);
 
   // Check if user has valid session
-  const isAuthenticated = user !== null && user?.accessToken;
+  const isAuthenticated = user !== null && user?.token;
 
   // Auto-redirect authenticated users to homepage
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      const timer = setTimeout(() => {
-        router.replace("/(tabs)");
-      }, 1000);
-      return () => clearTimeout(timer);
+      router.replace("/(tabs)");
     }
   }, [isLoading, isAuthenticated]);
 
   const handleGetStarted = () => {
-    setIsNavigating(true);
-
-    setTimeout(() => {
-      if (isAuthenticated) {
-        // User has session, go to homepage
-        router.replace("/(tabs)");
-      } else {
-        // No session, go to login
-        router.push("/(tabs)/login");
-      }
-    }, 300);
+    if (isAuthenticated) {
+      // User has session, go to homepage
+      router.replace("/(tabs)");
+    } else {
+      // No session, go to login
+      router.push("/(tabs)/login");
+    }
   };
 
   // Show loading while checking auth status
@@ -57,20 +49,7 @@ export default function Index() {
     );
   }
 
-  // If authenticated, show loading while redirecting
-  if (isAuthenticated) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#50C878" />
-          <Text style={styles.loadingText}>Welcome back...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // Show landing page for non-authenticated users
+  // Show landing page (no auto-redirect)
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
@@ -100,19 +79,11 @@ export default function Index() {
 
         {/* Get Started Button */}
         <TouchableOpacity
-          style={[
-            styles.getStartedButton,
-            isNavigating && styles.getStartedButtonDisabled,
-          ]}
+          style={styles.getStartedButton}
           onPress={handleGetStarted}
-          disabled={isNavigating}
           activeOpacity={0.8}
         >
-          {isNavigating ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.getStartedButtonText}>Get Started</Text>
-          )}
+          <Text style={styles.getStartedButtonText}>Get Started</Text>
         </TouchableOpacity>
 
         {/* Features */}
@@ -161,36 +132,37 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 32,
+    paddingHorizontal: 24,
+    paddingTop: 20,
   },
   logoContainer: {
-    marginBottom: 40,
+    marginBottom: 24,
   },
   logo: {
-    width: 280,
-    height: 280,
+    width: 200,
+    height: 200,
   },
   tagline: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "700",
     color: "#000",
     textAlign: "center",
-    marginBottom: 16,
+    marginBottom: 12,
     fontStyle: "italic",
   },
   description: {
-    fontSize: 16,
+    fontSize: 15,
     color: "#666",
     textAlign: "center",
-    lineHeight: 24,
-    marginBottom: 48,
-    paddingHorizontal: 20,
+    lineHeight: 22,
+    marginBottom: 40,
+    paddingHorizontal: 16,
   },
   getStartedButton: {
     backgroundColor: "#50C878",
-    paddingVertical: 18,
-    paddingHorizontal: 60,
-    borderRadius: 30,
+    paddingVertical: 14,
+    paddingHorizontal: 48,
+    borderRadius: 25,
     shadowColor: "#50C878",
     shadowOffset: {
       width: 0,
@@ -199,15 +171,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
-    minWidth: 200,
-    alignItems: "center",
-  },
-  getStartedButtonDisabled: {
-    opacity: 0.7,
+    alignSelf: "center",
+    marginBottom: 30,
   },
   getStartedButtonText: {
     color: "#fff",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
     letterSpacing: 0.5,
   },
@@ -215,8 +184,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-around",
     width: "100%",
-    marginTop: 60,
-    paddingHorizontal: 20,
+    marginTop: 30,
+    paddingHorizontal: 16,
   },
   featureItem: {
     alignItems: "center",

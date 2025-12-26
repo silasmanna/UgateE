@@ -1,6 +1,8 @@
 import { router } from "expo-router";
 import {
   ChevronRight,
+  Minus,
+  Plus,
   RefreshCw,
   Search,
   ShieldAlert,
@@ -39,8 +41,8 @@ const MedicineHomepage = () => {
 
   const filterTabs = [
     { id: "Home", label: "Home", icon: "🏠" },
-    { id: "Popular", label: "Popular", icon: "🔥" },
     { id: "Sales", label: "Sales", icon: "💰" },
+    { id: "Popular", label: "Popular", icon: "🔥" },
     { id: "Brand", label: "Brand", icon: "⭐" },
     { id: "New", label: "New", icon: "✨" },
   ];
@@ -107,7 +109,7 @@ const MedicineHomepage = () => {
     return filtered;
   };
 
-  const { addToCart } = useCart();
+  const { addToCart, isInCart, getItemQuantity } = useCart();
   const {
     user,
     categories,
@@ -371,18 +373,7 @@ const MedicineHomepage = () => {
       setTimeout(() => {
         addToCart(product, 1);
         setAddingProductId(null);
-        Alert.alert(
-          "Added to Cart",
-          `${product.name} has been added to your cart.`,
-          [
-            { text: "Continue Shopping", style: "cancel" },
-            {
-              text: "View Cart",
-              onPress: () => router.push("/cart"),
-            },
-          ]
-        );
-      }, 500);
+      }, 200);
     },
     [addToCart, user]
   );
@@ -497,69 +488,414 @@ const MedicineHomepage = () => {
             </Text>
           </View>
         )}
-
         {/* Categories Section */}
-        {!searchQuery.trim() && categories.length > 0 && (
-          <View style={styles.categoriesSection}>
-            <View style={styles.categoriesHeader}>
-              <Text style={styles.sectionTitle}>Categories</Text>
-              {categories.length > 8 && (
+        {!searchQuery.trim() &&
+          selectedFilter === "Home" &&
+          categories.length > 0 && (
+            <View style={styles.categoriesSection}>
+              <View style={styles.categoriesHeader}>
+                <Text style={styles.sectionTitle}>Categories</Text>
+                {categories.length > 8 && (
+                  <TouchableOpacity
+                    style={styles.viewAllButton}
+                    onPress={handleViewAllCategories}
+                  >
+                    <Text style={styles.viewAllText}>
+                      {showAllCategories ? "Show less" : "View all categories"}
+                    </Text>
+                    <ChevronRight size={16} color="#50C878" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View style={styles.categoriesGrid}>
+                {displayedCategories.map((category) => (
+                  <TouchableOpacity
+                    key={category.id}
+                    style={[
+                      styles.categoryCard,
+                      selectedCategory === category.name &&
+                        styles.categoryCardActive,
+                    ]}
+                    onPress={() => handleCategoryPress(category.name)}
+                  >
+                    <View
+                      style={[
+                        styles.categoryIcon,
+                        { backgroundColor: category.color },
+                      ]}
+                    >
+                      <Text style={styles.categoryEmoji}>{category.icon}</Text>
+                    </View>
+                    <Text
+                      style={[
+                        styles.categoryName,
+                        selectedCategory === category.name &&
+                          styles.categoryNameActive,
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {category.name}
+                    </Text>
+                    {selectedCategory === category.name && (
+                      <View style={styles.selectedIndicator} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+        {/* Sales Products Section */}
+        {!searchQuery.trim() &&
+          selectedFilter === "Home" &&
+          products.length > 0 && (
+            <View style={styles.horizontalSection}>
+              <View style={styles.horizontalSectionHeader}>
+                <Text style={styles.sectionTitle}>Sales</Text>
                 <TouchableOpacity
-                  style={styles.viewAllButton}
-                  onPress={handleViewAllCategories}
+                  style={styles.viewMoreButton}
+                  onPress={() => setSelectedFilter("Sales")}
                 >
-                  <Text style={styles.viewAllText}>
-                    {showAllCategories ? "Show less" : "View all categories"}
-                  </Text>
+                  <Text style={styles.viewMoreText}>View More</Text>
                   <ChevronRight size={16} color="#50C878" />
                 </TouchableOpacity>
-              )}
-            </View>
+              </View>
 
-            <View style={styles.categoriesGrid}>
-              {displayedCategories.map((category) => (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.horizontalScrollContent}
+              >
+                {products
+                  .filter((p) => p.discount && p.discount > 0)
+                  .sort((a, b) => (b.discount || 0) - (a.discount || 0))
+                  .slice(0, 10)
+                  .map((product) => {
+                    const restriction = getProductRestriction(product);
+                    const hasRestriction = restriction !== null;
+
+                    return (
+                      <TouchableOpacity
+                        key={product.id}
+                        style={styles.horizontalProductCard}
+                        onPress={() => handleProductPress(product)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.horizontalProductImage}>
+                          {product.image ? (
+                            <Image
+                              source={{ uri: product.image }}
+                              style={styles.productImageActual}
+                              resizeMode="contain"
+                            />
+                          ) : (
+                            <Text style={styles.productImagePlaceholder}>
+                              💊
+                            </Text>
+                          )}
+                          {!product.inStock && (
+                            <View style={styles.outOfStockBadge}>
+                              <Text style={styles.outOfStockText}>
+                                Out of Stock
+                              </Text>
+                            </View>
+                          )}
+                          {product.accessLevel &&
+                            product.accessLevel !== "OTC" && (
+                              <View style={styles.licenseBadge}>
+                                <ShieldAlert size={10} color="#fff" />
+                                <Text style={styles.licenseBadgeText}>
+                                  {product.accessLevel === "PATENT_ONLY"
+                                    ? "Rx"
+                                    : "Rx+"}
+                                </Text>
+                              </View>
+                            )}
+                          {product.originalPrice && product.discount > 0 && (
+                            <View style={styles.discountBadge}>
+                              <Text style={styles.discountText}>
+                                {Math.round(product.discount)}%
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+
+                        <View style={styles.horizontalProductInfo}>
+                          <Text style={styles.productName} numberOfLines={2}>
+                            {product.name}
+                          </Text>
+
+                          {product.rating && product.reviews > 0 && (
+                            <View style={styles.ratingRow}>
+                              <Star size={12} color="#FFB800" fill="#FFB800" />
+                              <Text style={styles.ratingText}>
+                                {product.rating}
+                              </Text>
+                              <Text style={styles.reviewsText}>
+                                ({product.reviews})
+                              </Text>
+                            </View>
+                          )}
+
+                          <View style={styles.priceRow}>
+                            <Text style={styles.price}>
+                              {formatPrice(product.price)}
+                            </Text>
+                            {product.originalPrice &&
+                              product.originalPrice > product.price && (
+                                <Text style={styles.originalPrice}>
+                                  {formatPrice(product.originalPrice)}
+                                </Text>
+                              )}
+                          </View>
+
+                          {isInCart(product.id) ? (
+                            <View style={styles.quantityControlCompact}>
+                              <TouchableOpacity
+                                style={styles.quantityButtonCompact}
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  const currentQty = getItemQuantity(
+                                    product.id
+                                  );
+                                  if (currentQty > 1) {
+                                    addToCart(product, -1);
+                                  }
+                                }}
+                              >
+                                <Minus size={14} color="#50C878" />
+                              </TouchableOpacity>
+                              <Text style={styles.quantityTextCompact}>
+                                {getItemQuantity(product.id)}
+                              </Text>
+                              <TouchableOpacity
+                                style={styles.quantityButtonCompact}
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  addToCart(product, 1);
+                                }}
+                              >
+                                <Plus size={14} color="#50C878" />
+                              </TouchableOpacity>
+                            </View>
+                          ) : (
+                            <TouchableOpacity
+                              style={[
+                                styles.addToCartButton,
+                                hasRestriction && styles.restrictedButton,
+                                restriction?.type === "VERIFICATION_REQUIRED" &&
+                                  styles.verificationButton,
+                                restriction?.type === "UPGRADE_REQUIRED" &&
+                                  styles.upgradeButton,
+                                addingProductId === product.id &&
+                                  styles.disabledButton,
+                              ]}
+                              onPress={(e) => handleAddToCart(e, product)}
+                              disabled={addingProductId === product.id}
+                            >
+                              {hasRestriction ? (
+                                <View style={styles.buttonContent}>
+                                  <ShieldAlert size={12} color="#fff" />
+                                  <Text style={styles.restrictedButtonText}>
+                                    {restriction.buttonText}
+                                  </Text>
+                                </View>
+                              ) : (
+                                <Text style={styles.addToCartButtonText}>
+                                  {addingProductId === product.id
+                                    ? "Adding..."
+                                    : "Add to Cart"}
+                                </Text>
+                              )}
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+              </ScrollView>
+            </View>
+          )}
+        {/* Popular Products Section */}
+        {!searchQuery.trim() &&
+          selectedFilter === "Home" &&
+          products.length > 0 && (
+            <View style={styles.horizontalSection}>
+              <View style={styles.horizontalSectionHeader}>
+                <Text style={styles.sectionTitle}>Popular</Text>
                 <TouchableOpacity
-                  key={category.id}
-                  style={[
-                    styles.categoryCard,
-                    selectedCategory === category.name &&
-                      styles.categoryCardActive,
-                  ]}
-                  onPress={() => handleCategoryPress(category.name)}
+                  style={styles.viewMoreButton}
+                  onPress={() => setSelectedFilter("Popular")}
                 >
-                  <View
-                    style={[
-                      styles.categoryIcon,
-                      { backgroundColor: category.color },
-                    ]}
-                  >
-                    <Text style={styles.categoryEmoji}>{category.icon}</Text>
-                  </View>
-                  <Text
-                    style={[
-                      styles.categoryName,
-                      selectedCategory === category.name &&
-                        styles.categoryNameActive,
-                    ]}
-                    numberOfLines={2}
-                  >
-                    {category.name}
-                  </Text>
-                  {selectedCategory === category.name && (
-                    <View style={styles.selectedIndicator} />
-                  )}
+                  <Text style={styles.viewMoreText}>View More</Text>
+                  <ChevronRight size={16} color="#50C878" />
                 </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.horizontalScrollContent}
+              >
+                {products
+                  .filter((p) => p.discount && p.discount > 0)
+                  .sort((a, b) => (b.discount || 0) - (a.discount || 0))
+                  .slice(0, 10)
+                  .map((product) => {
+                    const restriction = getProductRestriction(product);
+                    const hasRestriction = restriction !== null;
 
+                    return (
+                      <TouchableOpacity
+                        key={product.id}
+                        style={styles.horizontalProductCard}
+                        onPress={() => handleProductPress(product)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.horizontalProductImage}>
+                          {product.image ? (
+                            <Image
+                              source={{ uri: product.image }}
+                              style={styles.productImageActual}
+                              resizeMode="contain"
+                            />
+                          ) : (
+                            <Text style={styles.productImagePlaceholder}>
+                              💊
+                            </Text>
+                          )}
+                          {!product.inStock && (
+                            <View style={styles.outOfStockBadge}>
+                              <Text style={styles.outOfStockText}>
+                                Out of Stock
+                              </Text>
+                            </View>
+                          )}
+                          {product.accessLevel &&
+                            product.accessLevel !== "OTC" && (
+                              <View style={styles.licenseBadge}>
+                                <ShieldAlert size={10} color="#fff" />
+                                <Text style={styles.licenseBadgeText}>
+                                  {product.accessLevel === "PATENT_ONLY"
+                                    ? "Rx"
+                                    : "Rx+"}
+                                </Text>
+                              </View>
+                            )}
+                          {product.originalPrice && product.discount > 0 && (
+                            <View style={styles.discountBadge}>
+                              <Text style={styles.discountText}>
+                                {Math.round(product.discount)}%
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+
+                        <View style={styles.horizontalProductInfo}>
+                          <Text style={styles.productName} numberOfLines={2}>
+                            {product.name}
+                          </Text>
+
+                          {product.rating && product.reviews > 0 && (
+                            <View style={styles.ratingRow}>
+                              <Star size={12} color="#FFB800" fill="#FFB800" />
+                              <Text style={styles.ratingText}>
+                                {product.rating}
+                              </Text>
+                              <Text style={styles.reviewsText}>
+                                ({product.reviews})
+                              </Text>
+                            </View>
+                          )}
+
+                          <View style={styles.priceRow}>
+                            <Text style={styles.price}>
+                              {formatPrice(product.price)}
+                            </Text>
+                            {product.originalPrice &&
+                              product.originalPrice > product.price && (
+                                <Text style={styles.originalPrice}>
+                                  {formatPrice(product.originalPrice)}
+                                </Text>
+                              )}
+                          </View>
+
+                          {isInCart(product.id) ? (
+                            <View style={styles.quantityControlCompact}>
+                              <TouchableOpacity
+                                style={styles.quantityButtonCompact}
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  const currentQty = getItemQuantity(
+                                    product.id
+                                  );
+                                  if (currentQty > 1) {
+                                    addToCart(product, -1);
+                                  }
+                                }}
+                              >
+                                <Minus size={14} color="#50C878" />
+                              </TouchableOpacity>
+                              <Text style={styles.quantityTextCompact}>
+                                {getItemQuantity(product.id)}
+                              </Text>
+                              <TouchableOpacity
+                                style={styles.quantityButtonCompact}
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  addToCart(product, 1);
+                                }}
+                              >
+                                <Plus size={14} color="#50C878" />
+                              </TouchableOpacity>
+                            </View>
+                          ) : (
+                            <TouchableOpacity
+                              style={[
+                                styles.addToCartButton,
+                                hasRestriction && styles.restrictedButton,
+                                restriction?.type === "VERIFICATION_REQUIRED" &&
+                                  styles.verificationButton,
+                                restriction?.type === "UPGRADE_REQUIRED" &&
+                                  styles.upgradeButton,
+                                addingProductId === product.id &&
+                                  styles.disabledButton,
+                              ]}
+                              onPress={(e) => handleAddToCart(e, product)}
+                              disabled={addingProductId === product.id}
+                            >
+                              {hasRestriction ? (
+                                <View style={styles.buttonContent}>
+                                  <ShieldAlert size={12} color="#fff" />
+                                  <Text style={styles.restrictedButtonText}>
+                                    {restriction.buttonText}
+                                  </Text>
+                                </View>
+                              ) : (
+                                <Text style={styles.addToCartButtonText}>
+                                  {addingProductId === product.id
+                                    ? "Adding..."
+                                    : "Add to Cart"}
+                                </Text>
+                              )}
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+              </ScrollView>{" "}
+            </View>
+          )}
         {/* Products Section */}
         <View style={styles.productsSection}>
           <View style={styles.productsHeader}>
             <Text style={styles.sectionTitle}>
               {searchQuery.trim()
                 ? "Search Results"
+                : selectedFilter === "Popular"
+                ? "Popular"
+                : selectedFilter === "Sales"
+                ? "Sales"
                 : selectedCategory === "All"
                 ? "All Products"
                 : selectedCategory}
@@ -568,7 +904,6 @@ const MedicineHomepage = () => {
               {totalProducts} {totalProducts === 1 ? "product" : "products"}
               {totalProducts > itemsPerPage && (
                 <Text style={styles.paginationInfo}>
-                  {" "}
                   ({currentPage} of {totalPages})
                 </Text>
               )}
@@ -671,35 +1006,64 @@ const MedicineHomepage = () => {
                             )}
                         </View>
 
-                        <TouchableOpacity
-                          style={[
-                            styles.addToCartButton,
-                            hasRestriction && styles.restrictedButton,
-                            restriction?.type === "VERIFICATION_REQUIRED" &&
-                              styles.verificationButton,
-                            restriction?.type === "UPGRADE_REQUIRED" &&
-                              styles.upgradeButton,
-                            addingProductId === product.id &&
-                              styles.disabledButton,
-                          ]}
-                          onPress={(e) => handleAddToCart(e, product)}
-                          disabled={addingProductId === product.id}
-                        >
-                          {hasRestriction ? (
-                            <View style={styles.buttonContent}>
-                              <ShieldAlert size={12} color="#fff" />
-                              <Text style={styles.restrictedButtonText}>
-                                {restriction.buttonText}
-                              </Text>
-                            </View>
-                          ) : (
-                            <Text style={styles.addToCartButtonText}>
-                              {addingProductId === product.id
-                                ? "Adding..."
-                                : "Add to Cart"}
+                        {isInCart(product.id) ? (
+                          <View style={styles.quantityControlCompact}>
+                            <TouchableOpacity
+                              style={styles.quantityButtonCompact}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                const currentQty = getItemQuantity(product.id);
+                                if (currentQty > 1) {
+                                  addToCart(product, -1);
+                                }
+                              }}
+                            >
+                              <Minus size={14} color="#50C878" />
+                            </TouchableOpacity>
+                            <Text style={styles.quantityTextCompact}>
+                              {getItemQuantity(product.id)}
                             </Text>
-                          )}
-                        </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.quantityButtonCompact}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                addToCart(product, 1);
+                              }}
+                            >
+                              <Plus size={14} color="#50C878" />
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          <TouchableOpacity
+                            style={[
+                              styles.addToCartButton,
+                              hasRestriction && styles.restrictedButton,
+                              restriction?.type === "VERIFICATION_REQUIRED" &&
+                                styles.verificationButton,
+                              restriction?.type === "UPGRADE_REQUIRED" &&
+                                styles.upgradeButton,
+                              addingProductId === product.id &&
+                                styles.disabledButton,
+                            ]}
+                            onPress={(e) => handleAddToCart(e, product)}
+                            disabled={addingProductId === product.id}
+                          >
+                            {hasRestriction ? (
+                              <View style={styles.buttonContent}>
+                                <ShieldAlert size={12} color="#fff" />
+                                <Text style={styles.restrictedButtonText}>
+                                  {restriction.buttonText}
+                                </Text>
+                              </View>
+                            ) : (
+                              <Text style={styles.addToCartButtonText}>
+                                {addingProductId === product.id
+                                  ? "Adding..."
+                                  : "Add to Cart"}
+                              </Text>
+                            )}
+                          </TouchableOpacity>
+                        )}
                       </View>
                     </TouchableOpacity>
                   );
@@ -1196,6 +1560,80 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 11,
     fontWeight: "600",
+  },
+
+  horizontalSection: {
+    paddingVertical: 16,
+    backgroundColor: "#fff",
+    marginBottom: 8,
+  },
+  horizontalSectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  viewMoreButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  viewMoreText: {
+    fontSize: 14,
+    color: "#50C878",
+    fontWeight: "600",
+  },
+  horizontalScrollContent: {
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  horizontalProductCard: {
+    width: 160,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
+  },
+  horizontalProductImage: {
+    width: "100%",
+    height: 160,
+    backgroundColor: "#F5F5F5",
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    overflow: "hidden",
+    position: "relative",
+  },
+  horizontalProductInfo: {
+    padding: 12,
+  },
+  quantityControlCompact: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#f0fff4",
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: "#50C878",
+  },
+  quantityButtonCompact: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#50C878",
+  },
+  quantityTextCompact: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#50C878",
+    minWidth: 30,
+    textAlign: "center",
   },
   paginationContainer: {
     flexDirection: "row",

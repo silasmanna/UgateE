@@ -307,20 +307,9 @@ const ProductDetail = () => {
 
     setTimeout(() => {
       setIsAddingToCart(false);
-      Alert.alert(
-        "Added to Cart",
-        `${quantity} ${quantity === 1 ? "item" : "items"} added to your cart.`,
-        [
-          { text: "Continue Shopping", style: "cancel" },
-          {
-            text: "View Cart",
-            onPress: () => router.push("/cart"),
-          },
-        ]
-      );
       setQuantity(1);
       setQuantityInput("1");
-    }, 500);
+    }, 200);
   }, [product, quantity, addToCart, user]);
   if (loading) {
     return (
@@ -530,7 +519,7 @@ const ProductDetail = () => {
           <Text style={styles.productName}>{product.name}</Text>
           <Text style={styles.skuText}>SKU: {product.sku}</Text>
           <Text style={styles.expiryText}>
-            Expiry Date: {product.expiry_date}
+            Expiry Date: {product.expiryDate}
           </Text>
 
           <View style={styles.ratingRow}>
@@ -699,6 +688,169 @@ const ProductDetail = () => {
         )}
 
         <View style={styles.bottomPadding} />
+        {/* Suggested Products Section */}
+        {product.category && (
+          <View style={styles.suggestedSection}>
+            <View style={styles.suggestedHeader}>
+              <Text style={styles.sectionTitle}>Similar Products</Text>
+              <Text style={styles.suggestedSubtitle}>
+                From {product.category}
+              </Text>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.suggestedScrollContent}
+            >
+              {products
+                .filter(
+                  (p) =>
+                    p.category === product.category &&
+                    p.id !== product.id &&
+                    p.inStock
+                )
+                .slice(0, 10)
+                .map((suggestedProduct) => {
+                  const restriction = getProductRestriction(suggestedProduct);
+                  const hasRestriction = restriction !== null;
+
+                  return (
+                    <TouchableOpacity
+                      key={suggestedProduct.id}
+                      style={styles.suggestedProductCard}
+                      onPress={() => {
+                        setLoading(true);
+                        // Navigate to the new product
+                        router.push(`/product/${suggestedProduct.id}`);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.suggestedProductImage}>
+                        {suggestedProduct.image ? (
+                          <Image
+                            source={{ uri: suggestedProduct.image }}
+                            style={styles.productImageActual}
+                            resizeMode="contain"
+                          />
+                        ) : (
+                          <Text style={styles.productImagePlaceholder}>💊</Text>
+                        )}
+                        {suggestedProduct.accessLevel &&
+                          suggestedProduct.accessLevel !== "OTC" && (
+                            <View style={styles.licenseBadgeSmall}>
+                              <ShieldAlert size={8} color="#fff" />
+                              <Text style={styles.licenseBadgeTextSmall}>
+                                {suggestedProduct.accessLevel === "PATENT_ONLY"
+                                  ? "Rx"
+                                  : "Rx+"}
+                              </Text>
+                            </View>
+                          )}
+                        {suggestedProduct.originalPrice &&
+                          suggestedProduct.discount > 0 && (
+                            <View style={styles.discountBadgeSmall}>
+                              <Text style={styles.discountTextSmall}>
+                                {Math.round(suggestedProduct.discount)}%
+                              </Text>
+                            </View>
+                          )}
+                      </View>
+
+                      <View style={styles.suggestedProductInfo}>
+                        <Text
+                          style={styles.suggestedProductName}
+                          numberOfLines={2}
+                        >
+                          {suggestedProduct.name}
+                        </Text>
+
+                        {suggestedProduct.rating &&
+                          suggestedProduct.reviews > 0 && (
+                            <View style={styles.ratingRowSmall}>
+                              <Star size={10} color="#FFB800" fill="#FFB800" />
+                              <Text style={styles.ratingTextSmall}>
+                                {suggestedProduct.rating}
+                              </Text>
+                            </View>
+                          )}
+
+                        <View style={styles.priceRowSmall}>
+                          <Text style={styles.priceSmall}>
+                            {formatPrice(suggestedProduct.price)}
+                          </Text>
+                          {suggestedProduct.originalPrice &&
+                            suggestedProduct.originalPrice >
+                              suggestedProduct.price && (
+                              <Text style={styles.originalPriceSmall}>
+                                {formatPrice(suggestedProduct.originalPrice)}
+                              </Text>
+                            )}
+                        </View>
+
+                        {isInCart(suggestedProduct.id) ? (
+                          <View style={styles.quantityControlCompactSmall}>
+                            <TouchableOpacity
+                              style={styles.quantityButtonCompactSmall}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                const currentQty = getItemQuantity(
+                                  suggestedProduct.id
+                                );
+                                if (currentQty > 1) {
+                                  addToCart(suggestedProduct, -1);
+                                }
+                              }}
+                            >
+                              <Minus size={12} color="#50C878" />
+                            </TouchableOpacity>
+                            <Text style={styles.quantityTextCompactSmall}>
+                              {getItemQuantity(suggestedProduct.id)}
+                            </Text>
+                            <TouchableOpacity
+                              style={styles.quantityButtonCompactSmall}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                addToCart(suggestedProduct, 1);
+                              }}
+                            >
+                              <Plus size={12} color="#50C878" />
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          <TouchableOpacity
+                            style={[
+                              styles.addToCartButtonSmall,
+                              hasRestriction && styles.restrictedButtonSmall,
+                            ]}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              if (hasRestriction) {
+                                Alert.alert(
+                                  restriction.message,
+                                  `This product requires ${restriction.buttonText}`
+                                );
+                              } else {
+                                addToCart(suggestedProduct, 1);
+                                Alert.alert(
+                                  "Added to Cart",
+                                  `${suggestedProduct.name} added to cart`
+                                );
+                              }
+                            }}
+                          >
+                            <Text style={styles.addToCartButtonTextSmall}>
+                              {hasRestriction ? restriction.buttonText : "Add"}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+            </ScrollView>
+          </View>
+        )}
       </ScrollView>
 
       {/* Footer */}
@@ -1009,6 +1161,148 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#000",
     marginBottom: 12,
+  },
+  suggestedSection: {
+    backgroundColor: "#fff",
+    padding: 20,
+    marginBottom: 8,
+  },
+  suggestedHeader: {
+    marginBottom: 16,
+  },
+  suggestedSubtitle: {
+    fontSize: 13,
+    color: "#666",
+    marginTop: 4,
+  },
+  suggestedScrollContent: {
+    gap: 12,
+  },
+  suggestedProductCard: {
+    width: 140,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
+  },
+  suggestedProductImage: {
+    width: "100%",
+    height: 140,
+    backgroundColor: "#F5F5F5",
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    overflow: "hidden",
+    position: "relative",
+  },
+  suggestedProductInfo: {
+    padding: 10,
+  },
+  suggestedProductName: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#000",
+    marginBottom: 4,
+    minHeight: 32,
+  },
+  ratingRowSmall: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    marginBottom: 6,
+  },
+  ratingTextSmall: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#000",
+  },
+  priceRowSmall: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 8,
+  },
+  priceSmall: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#50C878",
+  },
+  originalPriceSmall: {
+    fontSize: 11,
+    color: "#999",
+    textDecorationLine: "line-through",
+  },
+  licenseBadgeSmall: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    backgroundColor: "#FF6B6B",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  licenseBadgeTextSmall: {
+    color: "#fff",
+    fontSize: 9,
+    fontWeight: "700",
+  },
+  discountBadgeSmall: {
+    position: "absolute",
+    bottom: 6,
+    right: 6,
+    backgroundColor: "#FF5722",
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  discountTextSmall: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  addToCartButtonSmall: {
+    backgroundColor: "#50C878",
+    paddingVertical: 8,
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  restrictedButtonSmall: {
+    backgroundColor: "#FF6B6B",
+  },
+  addToCartButtonTextSmall: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  quantityControlCompactSmall: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#f0fff4",
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+    borderWidth: 1,
+    borderColor: "#50C878",
+  },
+  quantityButtonCompactSmall: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#50C878",
+  },
+  quantityTextCompactSmall: {
+    fontSize: 13,
+    fontWeight: "bold",
+    color: "#50C878",
+    minWidth: 24,
+    textAlign: "center",
   },
   ratingRow: {
     flexDirection: "row",

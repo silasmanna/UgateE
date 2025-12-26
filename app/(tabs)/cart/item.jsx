@@ -31,6 +31,7 @@ const CartScreen = () => {
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [shippingAddress, setShippingAddress] = useState("");
+  const [buyerNote, setBuyerNote] = useState("");
 
   // Pre-fill address from user object when component mounts or user changes
   useEffect(() => {
@@ -120,6 +121,7 @@ const CartScreen = () => {
         quantity: item.quantity,
       })),
       shippingAddress: shippingAddress,
+      buyerNote: buyerNote,
     };
 
     // Log the data being sent
@@ -133,10 +135,11 @@ const CartScreen = () => {
 
     try {
       // Use the checkout function from AuthContext - pass shippingAddress as string
-      const result = await checkout(cartItems, shippingAddress);
+      const result = await checkout(cartItems, shippingAddress, buyerNote);
 
-      // Clear cart after successful checkout
+      // Clear cart and buyer note after successful checkout
       clearCart();
+      setBuyerNote("");
 
       // Show success message
       Alert.alert(
@@ -326,6 +329,25 @@ const CartScreen = () => {
                   No shipping address provided
                 </Text>
               )}
+            </View>
+
+            {/* Buyer Note */}
+            <View style={styles.noteContainer}>
+              <Text style={styles.noteTitle}>Order Notes (Optional)</Text>
+              <TextInput
+                style={styles.noteInput}
+                value={buyerNote}
+                onChangeText={setBuyerNote}
+                placeholder="Add any special instructions for your order..."
+                placeholderTextColor="#999"
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+                maxLength={500}
+              />
+              <Text style={styles.noteCharCount}>
+                {buyerNote.length}/500 characters
+              </Text>
             </View>
 
             {/* Order Summary */}
@@ -659,6 +681,44 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#999",
     fontStyle: "italic",
+  },
+  noteContainer: {
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginTop: 8,
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  noteTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#000",
+    marginBottom: 12,
+  },
+  noteInput: {
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: "#333",
+    minHeight: 80,
+    textAlignVertical: "top",
+  },
+  noteCharCount: {
+    fontSize: 12,
+    color: "#999",
+    textAlign: "right",
+    marginTop: 4,
   },
   summaryContainer: {
     backgroundColor: "#fff",

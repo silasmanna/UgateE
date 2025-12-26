@@ -31,6 +31,7 @@ const UPDATE_URL = `${API_BASE_URL}/buyers/account`;
 const FORGOT_PASSWORD_URL = `${API_BASE_URL}/auth/forgot-password`;
 const RESET_PASSWORD_URL = `${API_BASE_URL}/auth/reset-password`;
 const CHANGE_PASSWORD_URL = `${API_BASE_URL}/auth/change-password`;
+const CANCEL_ORDER_URL = `${API_BASE_URL}/buyer/orders/:id/cancel`;
 
 // Category icon mapping
 const CATEGORY_ICON_MAP = {
@@ -529,6 +530,9 @@ export function AuthProvider({ children }) {
           sku: product.sku,
           accessLevel: product.accessLevel,
           meta: product.meta,
+          expiryDate: product.expiry_date
+            ? new Date(product.expiry_date).toLocaleDateString("en-GB")
+            : null,
           category: categoryName,
           rating: 4.5,
           reviews: product.sold || 0,
@@ -610,7 +614,9 @@ export function AuthProvider({ children }) {
         sku: product.sku,
         accessLevel: product.accessLevel,
         meta: product.meta,
-        expiryDate: product.expiry_date,
+        expiryDate: product.expiry_date
+          ? new Date(product.expiry_date).toLocaleDateString("en-GB")
+          : null,
         category: product.categories[0].name,
         rating: 4.5,
         reviews: product.sold || 0,
@@ -694,6 +700,7 @@ export function AuthProvider({ children }) {
         status: order.paymentStatus,
         items: order.items || [],
         shippingAddress: order.shipping_address || null,
+        buyerNote: order.buyerNote || null,
         deliveryStatus: order.delivery_status || null,
       }));
 
@@ -715,13 +722,96 @@ export function AuthProvider({ children }) {
     setOrdersError,
   ]); // ⭐ DEPENDENCY ARRAY IS KEY ⭐
 
-  // --- CHECKOUT LOGIC ---
-  const checkout = async (cartItems, shippingAddress) => {
+  // CANCEL ORDERS LOGIC
+  const cancelOrder = async (orderId) => {
     try {
       const accessToken = await getToken("accessToken");
 
       if (!accessToken) {
         throw new Error("No access token available");
+      }
+
+      console.log(`🚫 Cancelling order ${orderId}...`);
+
+      // Replace :id with actual orderId
+      const url = CANCEL_ORDER_URL.replace(":id", orderId);
+
+      let response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      // Handle token refresh if needed
+      if (response.status === 401) {
+        console.log("🔄 Token expired, refreshing for order cancellation...");
+        const newAccessToken = await refreshAccessToken();
+
+        // Retry with new token
+        response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${newAccessToken}`,
+          },
+        });
+      }
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Failed to cancel order");
+      }
+
+      console.log(`✅ Order ${orderId} cancelled successfully`);
+
+      // Refresh orders list to update UI
+      await fetchOrders();
+
+      return {
+        success: true,
+        message: result.message || "Order cancelled successfully",
+        data: result.data,
+      };
+    } catch (error) {
+      console.error("❌ Error cancelling order:", error);
+      throw error;
+    }
+  };
+  // --- CHECKOUT LOGIC ---
+  const checkout = async (cartItems, shippingAddress, buyerNote = "") => {
+    const MAX_RETRIES = 2;
+    const TIMEOUT_MS = 30000; // 30 seconds
+
+    try {
+      // Validate inputs
+      if (!cartItems || cartItems.length === 0) {
+        throw new Error("Cart is empty");
+      }
+
+      if (
+        !shippingAddress ||
+        typeof shippingAddress !== "string" ||
+        !shippingAddress.trim()
+      ) {
+        throw new Error("Shipping address is required");
+      }
+
+      // Validate cart items structure
+      const invalidItems = cartItems.filter(
+        (item) => !item.id || !item.quantity || item.quantity <= 0
+      );
+
+      if (invalidItems.length > 0) {
+        throw new Error("Some cart items have invalid data");
+      }
+
+      const accessToken = await getToken("accessToken");
+
+      if (!accessToken) {
+        throw new Error("Authentication required. Please log in again.");
       }
 
       // Create required JSON structure
@@ -730,51 +820,187 @@ export function AuthProvider({ children }) {
           productId: item.id,
           quantity: item.quantity,
         })),
-        shippingAddress: shippingAddress,
+        shippingAddress: shippingAddress.trim(),
       };
+
+      // Only include buyerNote if it has actual content
+      const trimmedNote = buyerNote?.trim();
+      if (trimmedNote && trimmedNote.length > 0) {
+        checkoutData.buyerNote = trimmedNote;
+      }
 
       console.log("🛒 Processing checkout...");
       console.log("📦 Checkout data:", JSON.stringify(checkoutData, null, 2));
 
+      // Attempt checkout with retry logic
+      let lastError = null;
+
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          if (attempt > 0) {
+            console.log(`🔄 Retry attempt ${attempt}/${MAX_RETRIES}...`);
+            // Wait before retrying (exponential backoff)
+            await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+          }
+
+          const result = await performCheckoutRequest(
+            checkoutData,
+            accessToken,
+            TIMEOUT_MS
+          );
+
+          console.log("✅ Checkout successful");
+          return result;
+        } catch (error) {
+          lastError = error;
+
+          // Don't retry for certain errors
+          if (
+            error.message.includes("Authentication required") ||
+            error.message.includes("Cart is empty") ||
+            error.message.includes("Shipping address") ||
+            error.message.includes("invalid data") ||
+            error.status === 400 || // Bad request
+            error.status === 403 || // Forbidden
+            error.status === 404 // Not found
+          ) {
+            throw error; // Don't retry these
+          }
+
+          // If this was the last attempt, throw the error
+          if (attempt === MAX_RETRIES) {
+            throw error;
+          }
+
+          console.log(`⚠️ Attempt ${attempt + 1} failed, retrying...`);
+        }
+      }
+
+      // This should never be reached, but just in case
+      throw lastError || new Error("Checkout failed after multiple attempts");
+    } catch (error) {
+      console.error("❌ Checkout error:", error);
+
+      // Provide user-friendly error messages
+      if (
+        error.message.includes("Network request failed") ||
+        error.name === "TypeError"
+      ) {
+        throw new Error(
+          "Network error. Please check your internet connection and try again."
+        );
+      }
+
+      if (error.name === "AbortError" || error.message.includes("timeout")) {
+        throw new Error(
+          "Request timed out. Please check your connection and try again."
+        );
+      }
+
+      // Re-throw the error with the original message
+      throw error;
+    }
+  };
+
+  // Helper function to perform the actual checkout request
+  const performCheckoutRequest = async (
+    checkoutData,
+    accessToken,
+    timeoutMs
+  ) => {
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
       let response = await fetch(CHECKOUT_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Accept: "*/*",
+          Accept: "application/json",
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify(checkoutData),
+        signal: controller.signal,
       });
 
       // Handle token refresh if needed
       if (response.status === 401) {
         console.log("🔄 Token expired, refreshing for checkout...");
+
         const newAccessToken = await refreshAccessToken();
+
+        if (!newAccessToken) {
+          const error = new Error(
+            "Authentication required. Please log in again."
+          );
+          error.status = 401;
+          throw error;
+        }
 
         // Retry with new token
         response = await fetch(CHECKOUT_URL, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Accept: "*/*",
+            Accept: "application/json",
             Authorization: `Bearer ${newAccessToken}`,
           },
           body: JSON.stringify(checkoutData),
+          signal: controller.signal,
         });
       }
 
-      const result = await response.json();
-      console.log("📦 Checkout response:", JSON.stringify(result, null, 2));
+      // Parse response
+      let result;
+      const contentType = response.headers.get("content-type");
 
-      if (!response.ok || !result.success) {
-        throw new Error(result.message || "Failed to process checkout");
+      if (contentType && contentType.includes("application/json")) {
+        result = await response.json();
+      } else {
+        // Handle non-JSON responses
+        const text = await response.text();
+        result = {
+          success: false,
+          message: text || "Invalid response from server",
+        };
       }
 
-      console.log("✅ Checkout successful");
+      console.log("📦 Checkout response:", JSON.stringify(result, null, 2));
+
+      // Check if response is ok
+      if (!response.ok) {
+        const errorMessage =
+          result.message ||
+          result.error ||
+          `Checkout failed: ${response.status} ${response.statusText}`;
+
+        const error = new Error(errorMessage);
+        error.status = response.status;
+        throw error;
+      }
+
+      // Validate response structure
+      if (result.success === false) {
+        const error = new Error(
+          result.message || "Checkout was not successful"
+        );
+        error.status = response.status;
+        throw error;
+      }
+
+      // If success field doesn't exist but response is ok, assume success
+      if (result.success === undefined) {
+        console.log(
+          "⚠️ Response doesn't have 'success' field, assuming success based on HTTP status"
+        );
+        result.success = true;
+      }
+
       return result;
-    } catch (error) {
-      console.error("❌ Checkout error:", error);
-      throw error;
+    } finally {
+      // Always clear the timeout
+      clearTimeout(timeoutId);
     }
   };
   // Simplified UPDATE USER PROFILE DATA function
@@ -1444,6 +1670,7 @@ export function AuthProvider({ children }) {
     isLoadingOrders,
     ordersError,
     fetchOrders,
+    cancelOrder,
     // Checkout
     checkout,
   };

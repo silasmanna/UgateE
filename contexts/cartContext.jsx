@@ -60,7 +60,6 @@ export const CartProvider = ({ children }) => {
             : item
         );
       } else {
-        // Add new item
         return [
           ...prevItems,
           {

@@ -3,11 +3,17 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs, usePathname } from "expo-router";
 import { useEffect, useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
+import { useCart } from "../../contexts/cartContext";
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const pathname = usePathname();
   const [isTabBarVisible, setIsTabBarVisible] = useState(true);
+  const { cartItems } = useCart();
+
+  // Calculate total items in cart
+  const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   // Hide tab bar on specific routes
   useEffect(() => {
@@ -49,11 +55,20 @@ export default function TabLayout() {
         options={{
           title: "Cart",
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? "cart" : "cart-outline"}
-              size={26}
-              color={color}
-            />
+            <View style={styles.iconContainer}>
+              <Ionicons
+                name={focused ? "cart" : "cart-outline"}
+                size={26}
+                color={color}
+              />
+              {cartCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>
+                    {cartCount > 99 ? "99+" : cartCount}
+                  </Text>
+                </View>
+              )}
+            </View>
           ),
         }}
       />
@@ -75,7 +90,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="notice"
         options={{
-          title: "Notification",
+          title: "Orders",
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "notifications" : "notifications-outline"}
@@ -107,3 +122,30 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  iconContainer: {
+    width: 26,
+    height: 26,
+    position: "relative",
+  },
+  badge: {
+    position: "absolute",
+    right: -8,
+    top: -4,
+    backgroundColor: "#e91e63",
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  badgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "bold",
+  },
+});

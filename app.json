@@ -8,6 +8,12 @@
     "scheme": "allwecure",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/b6f0ade6-cd62-44b1-a1e0-34364004e049"
+    },
     "ios": {
       "supportsTablet": true
     },
@@ -22,6 +28,9 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.lasmann.Allwecure",
       "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "ACCESS_WIFI_STATE",
         "INTERNET",
         "ACCESS_NETWORK_STATE",
         "ACCESS_WIFI_STATE"
@@ -57,7 +66,8 @@
             "enableMinifyInReleaseBuilds": false
           }
         }
-      ]
+      ],
+      "sentry-expo"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -66,9 +76,11 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "f8c13b79-8c3b-4c37-be85-f9f308c61276"
+        "projectId": "b6f0ade6-cd62-44b1-a1e0-34364004e049"
       }
     },
-    "owner": "silomanna"
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
   }
 }
