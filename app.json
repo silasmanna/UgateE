@@ -12,7 +12,7 @@
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0,
-      "url": "https://u.expo.dev/b6f0ade6-cd62-44b1-a1e0-34364004e049"
+      "url": "https://u.expo.dev/c956b9e2-e294-4e66-a3ba-68893a9b091e"
     },
     "ios": {
       "supportsTablet": true
@@ -28,6 +28,9 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.lasmann.Allwecure",
       "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "ACCESS_WIFI_STATE",
         "INTERNET",
         "ACCESS_NETWORK_STATE",
         "ACCESS_WIFI_STATE"
@@ -78,11 +81,12 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "b6f0ade6-cd62-44b1-a1e0-34364004e049"
+        "projectId": "c956b9e2-e294-4e66-a3ba-68893a9b091e"
       }
     },
     "runtimeVersion": {
       "policy": "appVersion"
-    }
+    },
+    "owner": "herrsil"
   }
 }
