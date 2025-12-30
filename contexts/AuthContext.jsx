@@ -25,6 +25,7 @@ const VERIFY_OTP_URL = `${API_BASE_URL}/auth/verify-otp`;
 const RESEND_OTP_URL = `${API_BASE_URL}/auth/resend-otp`;
 const PRODUCTS_URL = `${API_BASE_URL}/buyer/products`;
 const CATEGORIES_URL = `${API_BASE_URL}/categories`;
+
 const CHECKOUT_URL = `${API_BASE_URL}/buyer/orders`;
 const ORDERS_URL = `${API_BASE_URL}/buyer/orders`;
 const UPDATE_URL = `${API_BASE_URL}/buyers/account`;
@@ -174,7 +175,6 @@ export function AuthProvider({ children }) {
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
   const navigationState = useRootNavigationState();
   const appState = useRef(AppState.currentState);
-  const ACCESS_TOKEN_LIFETIME = 15 * 60 * 1000; // 15 minutes
 
   // Products and Categories State
   const [categories, setCategories] = useState([]);
@@ -286,30 +286,8 @@ export function AuthProvider({ children }) {
           appState.current.match(/inactive|background/) &&
           nextAppState === "active"
         ) {
-          console.log("📱 App coming to foreground - checking session");
-          if (user) {
-            const lastActiveTime = await getLastActiveTime();
-            if (lastActiveTime) {
-              const timeDiff = Date.now() - lastActiveTime;
-              console.log(
-                `⏱️ Time since last active: ${Math.round(
-                  timeDiff / 1000
-                )} seconds`
-              );
-
-              // If more than 15 minutes, access token expired - refresh it
-              if (timeDiff > ACCESS_TOKEN_LIFETIME) {
-                console.log("⚠️ Access token expired - attempting refresh");
-                try {
-                  await refreshAccessToken();
-                } catch (error) {
-                  console.log("❌ Token refresh failed - logging out");
-                }
-              } else {
-                console.log("✅ Session still valid");
-              }
-            }
-          }
+          console.log("📱 App coming to foreground - session persists");
+          // Session persists indefinitely - no automatic expiration
         }
 
         appState.current = nextAppState;
@@ -328,42 +306,16 @@ export function AuthProvider({ children }) {
         const storedAccessToken = await getToken("accessToken");
         const storedRefreshToken = await getToken("refreshToken");
         const storedUserData = await getUserData("userData");
-        const lastActiveTime = await getLastActiveTime();
 
         if (storedAccessToken && storedRefreshToken && storedUserData) {
-          if (lastActiveTime) {
-            const timeDiff = Date.now() - lastActiveTime;
-
-            if (timeDiff > ACCESS_TOKEN_LIFETIME) {
-              console.log(
-                "⚠️ Access token expired on startup - attempting refresh"
-              );
-              try {
-                const newAccessToken = await refreshAccessToken();
-                setUser({
-                  accessToken: newAccessToken,
-                  refreshToken: storedRefreshToken,
-                  ...storedUserData,
-                });
-              } catch (error) {
-                console.log("❌ Token refresh failed on startup");
-                await clearAuthData();
-                setUser(null);
-              }
-            } else {
-              console.log("✅ Restoring valid session");
-              setUser({
-                accessToken: storedAccessToken,
-                refreshToken: storedRefreshToken,
-                ...storedUserData,
-              });
-            }
-          } else {
-            console.log("⚠️ No last active time - clearing session");
-            await clearAuthData();
-            setUser(null);
-          }
+          console.log("✅ Restoring persistent session");
+          setUser({
+            accessToken: storedAccessToken,
+            refreshToken: storedRefreshToken,
+            ...storedUserData,
+          });
         } else {
+          console.log("ℹ️ No stored session found");
           setUser(null);
         }
       } catch (error) {
