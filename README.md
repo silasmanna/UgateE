@@ -1,50 +1,113 @@
-# Welcome to your Expo app 👋
+# UgateE (Allwecure)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+**UgateE** (also known as **Allwecure**) is a comprehensive pharmaceutical e-commerce mobile application built with **React Native** and **Expo**. It is designed to facilitate the safe and regulated sale of medicines, ranging from Over-The-Counter (OTC) drugs to restricted prescription medications.
 
-## Get started
+The application incorporates strict regulatory compliance features, ensuring that restricted products are only accessible to verified users with the appropriate licenses (e.g., Patent Medicine Vendors, Pharmacists).
 
-1. Install dependencies
+## 🚀 Features
 
-   ```bash
-   npm install
-   ```
+### 🛍️ Marketplace & Shopping
 
-2. Start the app
+- **Product Catalog:** Browse a wide range of medicines organized by categories.
+- **Smart Search & Filtering:** Search for medicines and filter by Sales, Popularity, Brand, and New arrivals.
+- **Product Details:** View detailed information, including price, dosage, and stock status.
+- **Shopping Cart:** Add items, manage quantities, and proceed to checkout.
+- **Order Management:** Track orders and view purchase history (implied).
 
-   ```bash
-   npx expo start
-   ```
+### 🔐 User Management & Security
 
-In the output, you'll find options to open the app in a
+- **Authentication:** Secure Login, Registration, and Password Recovery (Forgot/Reset Password).
+- **OTP Verification:** Phone/Email verification using One-Time Passwords.
+- **Profile Management:** Edit profile details and manage account settings.
+- **KYC Verification:** Identity verification system for users.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### 🛡️ Regulatory Compliance & Access Control
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+The app implements a tiered access system to ensure drug safety:
 
-## Get a fresh project
+- **OTC (Over-The-Counter):** Available to all users.
+- **Rx (Patent Only):** Restricted to users with a verified "Patent Medicine" license.
+- **Rx+ (Prescription Only):** Restricted to users with a verified "Pharmacist" license.
+- **License Upload:** Users can upload documents to verify their professional status.
 
-When you're ready, run:
+## 🛠️ Tech Stack
 
-```bash
-npm run reset-project
+- **Framework:** [React Native](https://reactnative.dev/)
+- **Platform:** [Expo](https://expo.dev/) (SDK 54)
+- **Navigation:** [Expo Router](https://docs.expo.dev/router/introduction/) (v6) - File-based routing
+- **State Management:** React Context API (`AuthContext`, `cartContext`)
+- **UI Components:** Custom components & [Lucide React Native](https://lucide.dev/guide/packages/lucide-react-native) for icons
+- **Storage:** `AsyncStorage` & `Expo Secure Store`
+- **API Integration:** RESTful API integration (via `axios` or `fetch`)
+
+## 📂 Project Structure
+
+```
+UgateE/
+├── app/                    # Main application screens & navigation
+│   ├── (tabs)/             # Bottom tab navigation (Home, Explore, Cart, etc.)
+│   ├── product/            # Product detail screens
+│   ├── config/             # Configuration files
+│   ├── utils/              # Utility functions
+│   ├── _layout.jsx         # Root layout definition
+│   └── ...                 # Other screens (Auth, Profile, etc.)
+├── assets/                 # Images and static assets
+├── components/             # Reusable UI components
+│   ├── ui/                 # Base UI elements
+│   └── ...                 # Feature-specific components (e.g., KYCVerificationModal)
+├── constants/              # App constants (Theme, Colors)
+├── contexts/               # Global state contexts (Auth, Cart)
+├── hooks/                  # Custom React hooks
+└── scripts/                # Helper scripts
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## ⚡ Getting Started
 
-## Learn more
+### Prerequisites
 
-To learn more about developing your project with Expo, look at the following resources:
+- Node.js installed
+- npm or yarn
+- Expo Go app on your mobile device (or an Android/iOS emulator)
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### Installation
 
-## Join the community
+1.  **Clone the repository:**
 
-Join our community of developers creating universal apps.
+    ```bash
+    git clone https://github.com/silasmanna/UgateE.git
+    cd UgateE
+    ```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+2.  **Install dependencies:**
+
+    ```bash
+    npm install
+    ```
+
+3.  **Start the application:**
+
+    ```bash
+    npx expo start
+    ```
+
+4.  **Run on device:**
+    - Scan the QR code with the **Expo Go** app (Android) or Camera app (iOS).
+    - Press `a` to run on Android Emulator.
+    - Press `i` to run on iOS Simulator.
+    - Press `w` to run on Web.
+
+## 📱 Key Screens
+
+- **Home (`app/(tabs)/index.jsx`):** The main landing page featuring categories, sales, and popular products.
+- **Cart (`app/(tabs)/cart/`):** Manages selected items for purchase.
+- **Account (`app/(tabs)/account.jsx`):** User profile and settings hub.
+- **KYC Verification (`app/kyc-verification.js`):** Form for submitting verification documents.
+- **Product Details (`app/product/[id].jsx`):** Detailed view of a specific medicine.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📄 License
+
+This project is proprietary.
