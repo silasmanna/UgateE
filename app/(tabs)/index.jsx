@@ -9,11 +9,13 @@ import {
   Star,
   X,
 } from "lucide-react-native";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   Image,
+  Modal,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -53,74 +55,54 @@ const MedicineHomepage = () => {
   const [loadingProductName, setLoadingProductName] = useState("");
   const [addingProductId, setAddingProductId] = useState(null);
   const [showKYCModal, setShowKYCModal] = useState(false);
+  const [selectedBrand, setSelectedBrand] = useState(null);
+  const [showAllBrands, setShowAllBrands] = useState(false);
+  const [showExitModal, setShowExitModal] = useState(false);
 
-  const getFilteredProducts = (products) => {
-    let filtered = [...products];
-
-    switch (selectedFilter) {
-      case "Popular":
-        // Sort by sold count (high to low)
-        filtered = filtered.sort((a, b) => (b.sold || 0) - (a.sold || 0));
-        break;
-
-      case "Sales":
-        // Show only products with discount > 0
-        filtered = filtered.filter((p) => p.discount && p.discount > 0);
-        // Sort by discount percentage (high to low)
-        filtered = filtered.sort(
-          (a, b) => (b.discount || 0) - (a.discount || 0)
-        );
-        break;
-
-      case "Brand":
-        // Group by brand, then sort by sold count within each brand
-        filtered = filtered.filter((p) => p.brand && p.brand.trim() !== "");
-        filtered = filtered.sort((a, b) => {
-          // First sort by brand name
-          if (a.brand < b.brand) return -1;
-          if (a.brand > b.brand) return 1;
-          // Then by sold count within same brand
-          return (b.sold || 0) - (a.sold || 0);
-        });
-        break;
-
-      case "New":
-        // Sort by createdAt date (newest first)
-        filtered = filtered.sort((a, b) => {
-          const dateA = new Date(a.createdAt || 0);
-          const dateB = new Date(b.createdAt || 0);
-          return dateB - dateA;
-        });
-        // Optionally, filter to show only products from the last 30 days
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        filtered = filtered.filter((p) => {
-          if (!p.createdAt) return true; // Include products without date
-          return new Date(p.createdAt) >= thirtyDaysAgo;
-        });
-        break;
-
-      case "Home":
-      default:
-        // Default sorting - no specific filter
-        break;
-    }
-
-    return filtered;
-  };
+  // Add ref for ScrollView
+  const scrollViewRef = useRef(null);
 
   const { addToCart, isInCart, getItemQuantity } = useCart();
   const {
     user,
     categories,
     products,
+    productsMeta,
+    brands,
     isLoadingCategories,
     isLoadingProducts,
+    isLoadingBrands,
     categoriesError,
     productsError,
+    brandsError,
     fetchCategories,
     fetchProducts,
+    fetchBrands,
   } = useAuth();
+
+  // Handle back button press
+  useEffect(() => {
+    const backAction = () => {
+      setShowExitModal(true);
+      return true; // Prevent default back behavior
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction
+    );
+
+    return () => backHandler.remove();
+  }, []);
+
+  const handleExitApp = () => {
+    setShowExitModal(false);
+    BackHandler.exitApp();
+  };
+
+  const handleCancelExit = () => {
+    setShowExitModal(false);
+  };
 
   // Fetch data on mount if not already loaded
   useEffect(() => {
@@ -128,53 +110,120 @@ const MedicineHomepage = () => {
       fetchCategories();
     }
     if (products.length === 0 && !isLoadingProducts && !productsError) {
-      fetchProducts();
+      fetchProducts(1, itemsPerPage);
+    }
+    if (brands.length === 0 && !isLoadingBrands && !brandsError) {
+      fetchBrands();
     }
   }, []);
 
-  // Optional: A single log to confirm products have categories after loading
+  // Fetch products when page changes
   useEffect(() => {
-    if (products.length > 0 && products[0].category !== undefined) {
-      console.log(
-        "✅ Homepage received products with categories. Filter should work."
+    fetchProducts(currentPage, itemsPerPage);
+  }, [currentPage]);
+
+  // FIXED: Separate filtering for main grid vs horizontal sections
+  // This filters products for the MAIN GRID only
+  const getFilteredProducts = useCallback(() => {
+    let filtered = [...products];
+
+    // Apply category filter
+    if (selectedCategory !== "All") {
+      filtered = filtered.filter(
+        (product) => product.category === selectedCategory
       );
     }
+
+    // Apply brand filter
+    if (selectedBrand) {
+      filtered = filtered.filter(
+        (product) =>
+          product.brand &&
+          product.brand.toLowerCase() === selectedBrand.name.toLowerCase()
+      );
+    }
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      filtered = filtered.filter((product) =>
+        product.name.toLowerCase().includes(searchQuery.toLowerCase().trim())
+      );
+    }
+
+    // Apply filter based on selected tab
+    if (selectedFilter === "Sales") {
+      filtered = filtered.filter((p) => p.discount && p.discount > 0);
+      filtered = filtered.sort((a, b) => (b.discount || 0) - (a.discount || 0));
+    } else if (selectedFilter === "Popular") {
+      filtered = filtered.filter((p) => p.sold && p.sold > 0);
+      filtered = filtered.sort((a, b) => (b.sold || 0) - (a.sold || 0));
+    } else if (selectedFilter === "Brand") {
+      if (!selectedBrand) {
+        filtered = filtered.filter((p) => p.brand && p.brand.trim() !== "");
+      }
+      filtered = filtered.sort((a, b) => {
+        if (a.brand < b.brand) return -1;
+        if (a.brand > b.brand) return 1;
+        return (b.sold || 0) - (a.sold || 0);
+      });
+    } else if (selectedFilter === "New") {
+      filtered = filtered.sort((a, b) => {
+        const dateA = new Date(a.createdAt || 0);
+        const dateB = new Date(b.createdAt || 0);
+        return dateB - dateA;
+      });
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      filtered = filtered.filter((p) => {
+        if (!p.createdAt) return true;
+        return new Date(p.createdAt) >= thirtyDaysAgo;
+      });
+    }
+
+    return filtered;
+  }, [products, selectedCategory, selectedBrand, searchQuery, selectedFilter]);
+
+  // NEW: Separate functions for horizontal sections
+  const getSalesProducts = useCallback(() => {
+    return products
+      .filter((p) => p.discount && p.discount > 0)
+      .sort((a, b) => (b.discount || 0) - (a.discount || 0))
+      .slice(0, 10);
   }, [products]);
 
+  const getPopularProducts = useCallback(() => {
+    return products
+      .filter((p) => p.sold && p.sold > 0)
+      .sort((a, b) => (b.sold || 0) - (a.sold || 0))
+      .slice(0, 10);
+  }, [products]);
+
+  const filteredProducts = getFilteredProducts();
+  const salesProducts = getSalesProducts();
+  const popularProducts = getPopularProducts();
   const displayedCategories = showAllCategories
     ? categories
     : categories.slice(0, 8);
 
-  // Filter products by category first
-  const categoryFilteredProducts =
-    selectedCategory === "All"
-      ? products
-      : products.filter((product) => product.category === selectedCategory);
-
-  // Apply filter tab sorting
-  const filterTabProducts = getFilteredProducts(categoryFilteredProducts);
-
-  // Then filter by search query
-  const filteredProducts = searchQuery.trim()
-    ? filterTabProducts.filter((product) =>
-        product.name.toLowerCase().includes(searchQuery.toLowerCase().trim())
-      )
-    : filterTabProducts;
-
-  // Pagination calculations
-  const totalProducts = filteredProducts.length;
-  const totalPages = Math.ceil(totalProducts / itemsPerPage);
-  const indexOfLastProduct = currentPage * itemsPerPage;
-  const indexOfFirstProduct = indexOfLastProduct - itemsPerPage;
-  const currentProducts = filteredProducts.slice(
-    indexOfFirstProduct,
-    indexOfLastProduct
-  );
-
-  // Reset to page 1 when filters change
+  // FIXED: Reset to page 1 when filters change and fetch new data
   useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, selectedCategory]);
+    if (currentPage !== 1) {
+      setCurrentPage(1);
+    } else {
+      // If already on page 1, just refetch
+      fetchProducts(1, itemsPerPage);
+    }
+  }, [searchQuery, selectedCategory, selectedBrand, selectedFilter]);
+
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= (productsMeta.totalPages || 1)) {
+      setCurrentPage(newPage);
+      // Scroll to top when page changes
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      }, 100);
+    }
+  };
 
   const formatPrice = (price) => {
     return `₦${price.toLocaleString()}`;
@@ -191,34 +240,6 @@ const MedicineHomepage = () => {
   const isUserVerified = () => {
     if (!user) return false;
     return user.verification_status === "VERIFIED";
-  };
-
-  // Check if user can access a product based on access level
-  const canAccessProduct = (product) => {
-    const userTier = getUserTier();
-    const isVerified = isUserVerified();
-
-    if (!userTier) return false;
-
-    if (!product.accessLevel || product.accessLevel === "OTC") {
-      return true;
-    }
-
-    if (product.accessLevel === "PATENT_ONLY") {
-      if (userTier === "PATENT" || userTier === "PHARMACIST") {
-        return isVerified;
-      }
-      return false;
-    }
-
-    if (product.accessLevel === "PRESCRIPTION_ONLY") {
-      if (userTier === "PHARMACIST") {
-        return isVerified;
-      }
-      return false;
-    }
-
-    return false;
   };
 
   // Get restriction type for a product
@@ -284,7 +305,7 @@ const MedicineHomepage = () => {
     setTimeout(() => {
       setSelectedCategory(categoryName);
       setIsCategoryLoading(false);
-    }, 300);
+    }, 100);
   };
 
   const handleViewAllCategories = () => {
@@ -292,7 +313,7 @@ const MedicineHomepage = () => {
     setTimeout(() => {
       setShowAllCategories(!showAllCategories);
       setIsViewAllLoading(false);
-    }, 300);
+    }, 100);
   };
 
   const handleClearSearch = () => {
@@ -306,7 +327,7 @@ const MedicineHomepage = () => {
       router.push(`/product/${product.id}`);
       setIsProductLoading(false);
       setLoadingProductName("");
-    }, 300);
+    }, 100);
   }, []);
 
   const handleAddToCart = useCallback(
@@ -373,38 +394,49 @@ const MedicineHomepage = () => {
       setTimeout(() => {
         addToCart(product, 1);
         setAddingProductId(null);
-      }, 200);
+      }, 100);
     },
     [addToCart, user]
   );
 
+  const handleBrandPress = (brand) => {
+    setSelectedBrand(brand);
+    setSelectedCategory("All");
+    setSelectedFilter("Brand");
+  };
+
+  const handleClearBrand = () => {
+    setSelectedBrand(null);
+  };
+
   const handleRetry = () => {
     if (categoriesError) fetchCategories();
-    if (productsError) fetchProducts();
+    if (productsError) fetchProducts(currentPage, itemsPerPage);
+    if (brandsError) fetchBrands();
   };
 
   // Loading State
-  if (isLoadingCategories || isLoadingProducts) {
+  if (isLoadingCategories || isLoadingProducts || isLoadingBrands) {
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
         <StatusBar barStyle="dark-content" />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#50C878" />
-          <Text style={styles.loadingText}>Loading medicines...</Text>
+          <Text style={styles.loadingText}>Loading products...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   // Error State
-  if (categoriesError || productsError) {
+  if (categoriesError || productsError || brandsError) {
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
         <StatusBar barStyle="dark-content" />
         <View style={styles.errorContainer}>
           <Text style={styles.errorTitle}>⚠️ Something went wrong</Text>
           <Text style={styles.errorMessage}>
-            {categoriesError || productsError}
+            {categoriesError || productsError || brandsError}
           </Text>
           <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
             <RefreshCw size={20} color="#fff" />
@@ -419,13 +451,44 @@ const MedicineHomepage = () => {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <StatusBar barStyle="dark-content" />
 
+      {/* Exit App Modal */}
+      <Modal
+        visible={showExitModal}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCancelExit}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.exitModalContent}>
+            <Text style={styles.exitModalTitle}>Exit App?</Text>
+            <Text style={styles.exitModalMessage}>
+              Are you sure you want to exit the app?
+            </Text>
+            <View style={styles.exitModalButtons}>
+              <TouchableOpacity
+                style={styles.exitModalButtonCancel}
+                onPress={handleCancelExit}
+              >
+                <Text style={styles.exitModalButtonCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.exitModalButtonExit}
+                onPress={handleExitApp}
+              >
+                <Text style={styles.exitModalButtonExitText}>Exit</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchInputWrapper}>
           <Search size={20} color="#999" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search for medicines..."
+            placeholder="Search for products..."
             placeholderTextColor="#999"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -437,6 +500,7 @@ const MedicineHomepage = () => {
           )}
         </View>
       </View>
+
       {/* Filter Tabs */}
       <View style={styles.filterTabsContainer}>
         <ScrollView
@@ -471,26 +535,110 @@ const MedicineHomepage = () => {
       </View>
 
       <ScrollView
+        ref={scrollViewRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
+        {/* Selected Brand Banner - Show when a brand is selected */}
+        {selectedBrand && (
+          <View style={styles.selectedBrandBanner}>
+            <View style={styles.selectedBrandInfo}>
+              <Text style={styles.selectedBrandLabel}>
+                Showing products from:
+              </Text>
+              <Text style={styles.selectedBrandName}>{selectedBrand.name}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.clearBrandButton}
+              onPress={handleClearBrand}
+            >
+              <X size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Brands Section - Only show when Brand filter is active and no specific brand selected */}
+        {!searchQuery.trim() &&
+          selectedFilter === "Brand" &&
+          !selectedBrand &&
+          brands.length > 0 && (
+            <View style={styles.brandsSection}>
+              <View style={styles.brandsHeader}>
+                <Text style={styles.sectionTitle}>Shop by Brand</Text>
+                {brands.length > 8 && (
+                  <TouchableOpacity
+                    style={styles.viewAllButton}
+                    onPress={() => setShowAllBrands(!showAllBrands)}
+                  >
+                    <Text style={styles.viewAllText}>
+                      {showAllBrands ? "Show less" : "View all brands"}
+                    </Text>
+                    <ChevronRight size={16} color="#50C878" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View style={styles.brandsGrid}>
+                {(showAllBrands ? brands : brands.slice(0, 8)).map((brand) => (
+                  <TouchableOpacity
+                    key={brand.id}
+                    style={[
+                      styles.brandCard,
+                      selectedBrand?.id === brand.id && styles.brandCardActive,
+                    ]}
+                    onPress={() => handleBrandPress(brand)}
+                  >
+                    <View style={styles.brandImageContainer}>
+                      {brand.image ? (
+                        <Image
+                          source={{ uri: brand.image }}
+                          style={styles.brandImage}
+                          resizeMode="contain"
+                        />
+                      ) : (
+                        <View style={styles.brandImagePlaceholder}>
+                          <Text style={styles.brandInitial}>
+                            {brand.name.charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text
+                      style={[
+                        styles.brandName,
+                        selectedBrand?.id === brand.id &&
+                          styles.brandNameActive,
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {brand.name}
+                    </Text>
+                    {selectedBrand?.id === brand.id && (
+                      <View style={styles.selectedIndicator} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+
         {/* Search Results Info */}
         {searchQuery.trim() && (
           <View style={styles.searchResultsInfo}>
             <Text style={styles.searchResultsText}>
-              {totalProducts === 0
+              {filteredProducts.length === 0
                 ? `No results found for "${searchQuery}"`
-                : `Showing ${
-                    currentProducts.length
-                  } of ${totalProducts} result${
-                    totalProducts === 1 ? "" : "s"
+                : `Showing ${filteredProducts.length} result${
+                    filteredProducts.length === 1 ? "" : "s"
                   } for "${searchQuery}"`}
             </Text>
           </View>
         )}
+
         {/* Categories Section */}
         {!searchQuery.trim() &&
           selectedFilter === "Home" &&
+          !selectedBrand &&
           categories.length > 0 && (
             <View style={styles.categoriesSection}>
               <View style={styles.categoriesHeader}>
@@ -545,10 +693,11 @@ const MedicineHomepage = () => {
               </View>
             </View>
           )}
-        {/* Sales Products Section */}
+        {/* Sales Products Section - Only show on Home tab */}
         {!searchQuery.trim() &&
+          !selectedBrand &&
           selectedFilter === "Home" &&
-          products.length > 0 && (
+          salesProducts.length > 0 && (
             <View style={styles.horizontalSection}>
               <View style={styles.horizontalSectionHeader}>
                 <Text style={styles.sectionTitle}>Sales</Text>
@@ -566,160 +715,154 @@ const MedicineHomepage = () => {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.horizontalScrollContent}
               >
-                {products
-                  .filter((p) => p.discount && p.discount > 0)
-                  .sort((a, b) => (b.discount || 0) - (a.discount || 0))
-                  .slice(0, 10)
-                  .map((product) => {
-                    const restriction = getProductRestriction(product);
-                    const hasRestriction = restriction !== null;
+                {salesProducts.map((product) => {
+                  const restriction = getProductRestriction(product);
+                  const hasRestriction = restriction !== null;
 
-                    return (
-                      <TouchableOpacity
-                        key={product.id}
-                        style={styles.horizontalProductCard}
-                        onPress={() => handleProductPress(product)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.horizontalProductImage}>
-                          {product.image ? (
-                            <Image
-                              source={{ uri: product.image }}
-                              style={styles.productImageActual}
-                              resizeMode="contain"
-                            />
-                          ) : (
-                            <Text style={styles.productImagePlaceholder}>
-                              💊
+                  return (
+                    <TouchableOpacity
+                      key={product.id}
+                      style={styles.horizontalProductCard}
+                      onPress={() => handleProductPress(product)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.horizontalProductImage}>
+                        {product.image ? (
+                          <Image
+                            source={{ uri: product.image }}
+                            style={styles.productImageActual}
+                            resizeMode="contain"
+                          />
+                        ) : (
+                          <Text style={styles.productImagePlaceholder}>💊</Text>
+                        )}
+                        {!product.inStock && (
+                          <View style={styles.outOfStockBadge}>
+                            <Text style={styles.outOfStockText}>
+                              Out of Stock
                             </Text>
-                          )}
-                          {!product.inStock && (
-                            <View style={styles.outOfStockBadge}>
-                              <Text style={styles.outOfStockText}>
-                                Out of Stock
+                          </View>
+                        )}
+                        {product.accessLevel &&
+                          product.accessLevel !== "OTC" && (
+                            <View style={styles.licenseBadge}>
+                              <ShieldAlert size={10} color="#fff" />
+                              <Text style={styles.licenseBadgeText}>
+                                {product.accessLevel === "PATENT_ONLY"
+                                  ? "Rx"
+                                  : "Rx+"}
                               </Text>
                             </View>
                           )}
-                          {product.accessLevel &&
-                            product.accessLevel !== "OTC" && (
-                              <View style={styles.licenseBadge}>
-                                <ShieldAlert size={10} color="#fff" />
-                                <Text style={styles.licenseBadgeText}>
-                                  {product.accessLevel === "PATENT_ONLY"
-                                    ? "Rx"
-                                    : "Rx+"}
+                        {product.originalPrice && product.discount > 0 && (
+                          <View style={styles.discountBadge}>
+                            <Text style={styles.discountText}>
+                              {Math.round(product.discount)}%
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      <View style={styles.horizontalProductInfo}>
+                        <Text style={styles.productName} numberOfLines={2}>
+                          {product.name}
+                        </Text>
+
+                        {product.rating && product.reviews > 0 && (
+                          <View style={styles.ratingRow}>
+                            <Star size={12} color="#FFB800" fill="#FFB800" />
+                            <Text style={styles.ratingText}>
+                              {product.rating}
+                            </Text>
+                            <Text style={styles.reviewsText}>
+                              ({product.reviews})
+                            </Text>
+                          </View>
+                        )}
+
+                        <View style={styles.priceRow}>
+                          <Text style={styles.price}>
+                            {formatPrice(product.price)}
+                          </Text>
+                          {product.originalPrice &&
+                            product.originalPrice > product.price && (
+                              <Text style={styles.originalPrice}>
+                                {formatPrice(product.originalPrice)}
+                              </Text>
+                            )}
+                        </View>
+
+                        {isInCart(product.id) ? (
+                          <View style={styles.quantityControlCompact}>
+                            <TouchableOpacity
+                              style={styles.quantityButtonCompact}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                const currentQty = getItemQuantity(product.id);
+                                if (currentQty > 1) {
+                                  addToCart(product, -1);
+                                }
+                              }}
+                            >
+                              <Minus size={14} color="#50C878" />
+                            </TouchableOpacity>
+                            <Text style={styles.quantityTextCompact}>
+                              {getItemQuantity(product.id)}
+                            </Text>
+                            <TouchableOpacity
+                              style={styles.quantityButtonCompact}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                addToCart(product, 1);
+                              }}
+                            >
+                              <Plus size={14} color="#50C878" />
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          <TouchableOpacity
+                            style={[
+                              styles.addToCartButton,
+                              hasRestriction && styles.restrictedButton,
+                              restriction?.type === "VERIFICATION_REQUIRED" &&
+                                styles.verificationButton,
+                              restriction?.type === "UPGRADE_REQUIRED" &&
+                                styles.upgradeButton,
+                              addingProductId === product.id &&
+                                styles.disabledButton,
+                            ]}
+                            onPress={(e) => handleAddToCart(e, product)}
+                            disabled={addingProductId === product.id}
+                          >
+                            {hasRestriction ? (
+                              <View style={styles.buttonContent}>
+                                <ShieldAlert size={12} color="#fff" />
+                                <Text style={styles.restrictedButtonText}>
+                                  {restriction.buttonText}
                                 </Text>
                               </View>
+                            ) : (
+                              <Text style={styles.addToCartButtonText}>
+                                {addingProductId === product.id
+                                  ? "Adding..."
+                                  : "Add to Cart"}
+                              </Text>
                             )}
-                          {product.originalPrice && product.discount > 0 && (
-                            <View style={styles.discountBadge}>
-                              <Text style={styles.discountText}>
-                                {Math.round(product.discount)}%
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-
-                        <View style={styles.horizontalProductInfo}>
-                          <Text style={styles.productName} numberOfLines={2}>
-                            {product.name}
-                          </Text>
-
-                          {product.rating && product.reviews > 0 && (
-                            <View style={styles.ratingRow}>
-                              <Star size={12} color="#FFB800" fill="#FFB800" />
-                              <Text style={styles.ratingText}>
-                                {product.rating}
-                              </Text>
-                              <Text style={styles.reviewsText}>
-                                ({product.reviews})
-                              </Text>
-                            </View>
-                          )}
-
-                          <View style={styles.priceRow}>
-                            <Text style={styles.price}>
-                              {formatPrice(product.price)}
-                            </Text>
-                            {product.originalPrice &&
-                              product.originalPrice > product.price && (
-                                <Text style={styles.originalPrice}>
-                                  {formatPrice(product.originalPrice)}
-                                </Text>
-                              )}
-                          </View>
-
-                          {isInCart(product.id) ? (
-                            <View style={styles.quantityControlCompact}>
-                              <TouchableOpacity
-                                style={styles.quantityButtonCompact}
-                                onPress={(e) => {
-                                  e.stopPropagation();
-                                  const currentQty = getItemQuantity(
-                                    product.id
-                                  );
-                                  if (currentQty > 1) {
-                                    addToCart(product, -1);
-                                  }
-                                }}
-                              >
-                                <Minus size={14} color="#50C878" />
-                              </TouchableOpacity>
-                              <Text style={styles.quantityTextCompact}>
-                                {getItemQuantity(product.id)}
-                              </Text>
-                              <TouchableOpacity
-                                style={styles.quantityButtonCompact}
-                                onPress={(e) => {
-                                  e.stopPropagation();
-                                  addToCart(product, 1);
-                                }}
-                              >
-                                <Plus size={14} color="#50C878" />
-                              </TouchableOpacity>
-                            </View>
-                          ) : (
-                            <TouchableOpacity
-                              style={[
-                                styles.addToCartButton,
-                                hasRestriction && styles.restrictedButton,
-                                restriction?.type === "VERIFICATION_REQUIRED" &&
-                                  styles.verificationButton,
-                                restriction?.type === "UPGRADE_REQUIRED" &&
-                                  styles.upgradeButton,
-                                addingProductId === product.id &&
-                                  styles.disabledButton,
-                              ]}
-                              onPress={(e) => handleAddToCart(e, product)}
-                              disabled={addingProductId === product.id}
-                            >
-                              {hasRestriction ? (
-                                <View style={styles.buttonContent}>
-                                  <ShieldAlert size={12} color="#fff" />
-                                  <Text style={styles.restrictedButtonText}>
-                                    {restriction.buttonText}
-                                  </Text>
-                                </View>
-                              ) : (
-                                <Text style={styles.addToCartButtonText}>
-                                  {addingProductId === product.id
-                                    ? "Adding..."
-                                    : "Add to Cart"}
-                                </Text>
-                              )}
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
               </ScrollView>
             </View>
           )}
-        {/* Popular Products Section */}
+
+        {/* Popular Products Section - Only show on Home tab */}
         {!searchQuery.trim() &&
+          !selectedBrand &&
           selectedFilter === "Home" &&
-          products.length > 0 && (
+          popularProducts.length > 0 && (
             <View style={styles.horizontalSection}>
               <View style={styles.horizontalSectionHeader}>
                 <Text style={styles.sectionTitle}>Popular</Text>
@@ -736,181 +879,179 @@ const MedicineHomepage = () => {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.horizontalScrollContent}
               >
-                {products
-                  .filter((p) => p.discount && p.discount > 0)
-                  .sort((a, b) => (b.discount || 0) - (a.discount || 0))
-                  .slice(0, 10)
-                  .map((product) => {
-                    const restriction = getProductRestriction(product);
-                    const hasRestriction = restriction !== null;
+                {popularProducts.map((product) => {
+                  const restriction = getProductRestriction(product);
+                  const hasRestriction = restriction !== null;
 
-                    return (
-                      <TouchableOpacity
-                        key={product.id}
-                        style={styles.horizontalProductCard}
-                        onPress={() => handleProductPress(product)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.horizontalProductImage}>
-                          {product.image ? (
-                            <Image
-                              source={{ uri: product.image }}
-                              style={styles.productImageActual}
-                              resizeMode="contain"
-                            />
-                          ) : (
-                            <Text style={styles.productImagePlaceholder}>
-                              💊
+                  return (
+                    <TouchableOpacity
+                      key={product.id}
+                      style={styles.horizontalProductCard}
+                      onPress={() => handleProductPress(product)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.horizontalProductImage}>
+                        {product.image ? (
+                          <Image
+                            source={{ uri: product.image }}
+                            style={styles.productImageActual}
+                            resizeMode="contain"
+                          />
+                        ) : (
+                          <Text style={styles.productImagePlaceholder}>💊</Text>
+                        )}
+                        {!product.inStock && (
+                          <View style={styles.outOfStockBadge}>
+                            <Text style={styles.outOfStockText}>
+                              Out of Stock
                             </Text>
-                          )}
-                          {!product.inStock && (
-                            <View style={styles.outOfStockBadge}>
-                              <Text style={styles.outOfStockText}>
-                                Out of Stock
+                          </View>
+                        )}
+                        {product.accessLevel &&
+                          product.accessLevel !== "OTC" && (
+                            <View style={styles.licenseBadge}>
+                              <ShieldAlert size={10} color="#fff" />
+                              <Text style={styles.licenseBadgeText}>
+                                {product.accessLevel === "PATENT_ONLY"
+                                  ? "Rx"
+                                  : "Rx+"}
                               </Text>
                             </View>
                           )}
-                          {product.accessLevel &&
-                            product.accessLevel !== "OTC" && (
-                              <View style={styles.licenseBadge}>
-                                <ShieldAlert size={10} color="#fff" />
-                                <Text style={styles.licenseBadgeText}>
-                                  {product.accessLevel === "PATENT_ONLY"
-                                    ? "Rx"
-                                    : "Rx+"}
+                        {product.originalPrice && product.discount > 0 && (
+                          <View style={styles.discountBadge}>
+                            <Text style={styles.discountText}>
+                              {Math.round(product.discount)}%
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      <View style={styles.horizontalProductInfo}>
+                        <Text style={styles.productName} numberOfLines={2}>
+                          {product.name}
+                        </Text>
+
+                        {product.rating && product.reviews > 0 && (
+                          <View style={styles.ratingRow}>
+                            <Star size={12} color="#FFB800" fill="#FFB800" />
+                            <Text style={styles.ratingText}>
+                              {product.rating}
+                            </Text>
+                            <Text style={styles.reviewsText}>
+                              ({product.reviews})
+                            </Text>
+                          </View>
+                        )}
+
+                        <View style={styles.priceRow}>
+                          <Text style={styles.price}>
+                            {formatPrice(product.price)}
+                          </Text>
+                          {product.originalPrice &&
+                            product.originalPrice > product.price && (
+                              <Text style={styles.originalPrice}>
+                                {formatPrice(product.originalPrice)}
+                              </Text>
+                            )}
+                        </View>
+
+                        {isInCart(product.id) ? (
+                          <View style={styles.quantityControlCompact}>
+                            <TouchableOpacity
+                              style={styles.quantityButtonCompact}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                const currentQty = getItemQuantity(product.id);
+                                if (currentQty > 1) {
+                                  addToCart(product, -1);
+                                }
+                              }}
+                            >
+                              <Minus size={14} color="#50C878" />
+                            </TouchableOpacity>
+                            <Text style={styles.quantityTextCompact}>
+                              {getItemQuantity(product.id)}
+                            </Text>
+                            <TouchableOpacity
+                              style={styles.quantityButtonCompact}
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                addToCart(product, 1);
+                              }}
+                            >
+                              <Plus size={14} color="#50C878" />
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          <TouchableOpacity
+                            style={[
+                              styles.addToCartButton,
+                              hasRestriction && styles.restrictedButton,
+                              restriction?.type === "VERIFICATION_REQUIRED" &&
+                                styles.verificationButton,
+                              restriction?.type === "UPGRADE_REQUIRED" &&
+                                styles.upgradeButton,
+                              addingProductId === product.id &&
+                                styles.disabledButton,
+                            ]}
+                            onPress={(e) => handleAddToCart(e, product)}
+                            disabled={addingProductId === product.id}
+                          >
+                            {hasRestriction ? (
+                              <View style={styles.buttonContent}>
+                                <ShieldAlert size={12} color="#fff" />
+                                <Text style={styles.restrictedButtonText}>
+                                  {restriction.buttonText}
                                 </Text>
                               </View>
+                            ) : (
+                              <Text style={styles.addToCartButtonText}>
+                                {addingProductId === product.id
+                                  ? "Adding..."
+                                  : "Add to Cart"}
+                              </Text>
                             )}
-                          {product.originalPrice && product.discount > 0 && (
-                            <View style={styles.discountBadge}>
-                              <Text style={styles.discountText}>
-                                {Math.round(product.discount)}%
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-
-                        <View style={styles.horizontalProductInfo}>
-                          <Text style={styles.productName} numberOfLines={2}>
-                            {product.name}
-                          </Text>
-
-                          {product.rating && product.reviews > 0 && (
-                            <View style={styles.ratingRow}>
-                              <Star size={12} color="#FFB800" fill="#FFB800" />
-                              <Text style={styles.ratingText}>
-                                {product.rating}
-                              </Text>
-                              <Text style={styles.reviewsText}>
-                                ({product.reviews})
-                              </Text>
-                            </View>
-                          )}
-
-                          <View style={styles.priceRow}>
-                            <Text style={styles.price}>
-                              {formatPrice(product.price)}
-                            </Text>
-                            {product.originalPrice &&
-                              product.originalPrice > product.price && (
-                                <Text style={styles.originalPrice}>
-                                  {formatPrice(product.originalPrice)}
-                                </Text>
-                              )}
-                          </View>
-
-                          {isInCart(product.id) ? (
-                            <View style={styles.quantityControlCompact}>
-                              <TouchableOpacity
-                                style={styles.quantityButtonCompact}
-                                onPress={(e) => {
-                                  e.stopPropagation();
-                                  const currentQty = getItemQuantity(
-                                    product.id
-                                  );
-                                  if (currentQty > 1) {
-                                    addToCart(product, -1);
-                                  }
-                                }}
-                              >
-                                <Minus size={14} color="#50C878" />
-                              </TouchableOpacity>
-                              <Text style={styles.quantityTextCompact}>
-                                {getItemQuantity(product.id)}
-                              </Text>
-                              <TouchableOpacity
-                                style={styles.quantityButtonCompact}
-                                onPress={(e) => {
-                                  e.stopPropagation();
-                                  addToCart(product, 1);
-                                }}
-                              >
-                                <Plus size={14} color="#50C878" />
-                              </TouchableOpacity>
-                            </View>
-                          ) : (
-                            <TouchableOpacity
-                              style={[
-                                styles.addToCartButton,
-                                hasRestriction && styles.restrictedButton,
-                                restriction?.type === "VERIFICATION_REQUIRED" &&
-                                  styles.verificationButton,
-                                restriction?.type === "UPGRADE_REQUIRED" &&
-                                  styles.upgradeButton,
-                                addingProductId === product.id &&
-                                  styles.disabledButton,
-                              ]}
-                              onPress={(e) => handleAddToCart(e, product)}
-                              disabled={addingProductId === product.id}
-                            >
-                              {hasRestriction ? (
-                                <View style={styles.buttonContent}>
-                                  <ShieldAlert size={12} color="#fff" />
-                                  <Text style={styles.restrictedButtonText}>
-                                    {restriction.buttonText}
-                                  </Text>
-                                </View>
-                              ) : (
-                                <Text style={styles.addToCartButtonText}>
-                                  {addingProductId === product.id
-                                    ? "Adding..."
-                                    : "Add to Cart"}
-                                </Text>
-                              )}
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-              </ScrollView>{" "}
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             </View>
           )}
+
         {/* Products Section */}
         <View style={styles.productsSection}>
           <View style={styles.productsHeader}>
             <Text style={styles.sectionTitle}>
               {searchQuery.trim()
                 ? "Search Results"
+                : selectedBrand
+                ? `${selectedBrand.name} Products`
                 : selectedFilter === "Popular"
                 ? "Popular"
                 : selectedFilter === "Sales"
                 ? "Sales"
+                : selectedFilter === "Brand"
+                ? "All Brands"
                 : selectedCategory === "All"
                 ? "All Products"
                 : selectedCategory}
             </Text>
             <Text style={styles.productsCount}>
-              {totalProducts} {totalProducts === 1 ? "product" : "products"}
-              {totalProducts > itemsPerPage && (
+              {productsMeta.total}
+              {productsMeta.total === 1 ? "product" : "products"}
+              {productsMeta.totalPages > 1 && (
                 <Text style={styles.paginationInfo}>
-                  ({currentPage} of {totalPages})
+                  (Page {productsMeta.page} of {productsMeta.totalPages})
                 </Text>
               )}
             </Text>
           </View>
 
-          {totalProducts === 0 ? (
+          {filteredProducts.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateText}>
                 {searchQuery.trim()
@@ -929,7 +1070,7 @@ const MedicineHomepage = () => {
           ) : (
             <>
               <View style={styles.productsGrid}>
-                {currentProducts.map((product) => {
+                {filteredProducts.map((product) => {
                   const restriction = getProductRestriction(product);
                   const hasRestriction = restriction !== null;
 
@@ -1070,16 +1211,16 @@ const MedicineHomepage = () => {
                 })}
               </View>
 
-              {/* Pagination Controls */}
-              {totalPages > 1 && (
+              {/* Pagination controls */}
+              {productsMeta.totalPages > 1 && (
                 <View style={styles.paginationContainer}>
                   <TouchableOpacity
                     style={[
                       styles.paginationButton,
                       currentPage === 1 && styles.paginationButtonDisabled,
                     ]}
-                    onPress={() => setCurrentPage(currentPage - 1)}
-                    disabled={currentPage === 1}
+                    onPress={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1 || isLoadingProducts}
                   >
                     <Text
                       style={[
@@ -1094,12 +1235,12 @@ const MedicineHomepage = () => {
 
                   <View style={styles.pageNumbers}>
                     {Array.from(
-                      { length: totalPages },
+                      { length: productsMeta.totalPages },
                       (_, index) => index + 1
                     ).map((page) => {
                       if (
                         page === 1 ||
-                        page === totalPages ||
+                        page === productsMeta.totalPages ||
                         (page >= currentPage - 1 && page <= currentPage + 1)
                       ) {
                         return (
@@ -1109,7 +1250,8 @@ const MedicineHomepage = () => {
                               styles.pageNumber,
                               currentPage === page && styles.pageNumberActive,
                             ]}
-                            onPress={() => setCurrentPage(page)}
+                            onPress={() => handlePageChange(page)}
+                            disabled={isLoadingProducts}
                           >
                             <Text
                               style={[
@@ -1139,16 +1281,15 @@ const MedicineHomepage = () => {
                   <TouchableOpacity
                     style={[
                       styles.paginationButton,
-                      currentPage === totalPages &&
-                        styles.paginationButtonDisabled,
+                      !productsMeta.hasNext && styles.paginationButtonDisabled,
                     ]}
-                    onPress={() => setCurrentPage(currentPage + 1)}
-                    disabled={currentPage === totalPages}
+                    onPress={() => handlePageChange(currentPage + 1)}
+                    disabled={!productsMeta.hasNext || isLoadingProducts}
                   >
                     <Text
                       style={[
                         styles.paginationButtonText,
-                        currentPage === totalPages &&
+                        !productsMeta.hasNext &&
                           styles.paginationButtonTextDisabled,
                       ]}
                     >
@@ -1234,6 +1375,60 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  exitModalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 24,
+    width: "80%",
+    maxWidth: 320,
+  },
+  exitModalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#000",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  exitModalMessage: {
+    fontSize: 14,
+    color: "#666",
+    marginBottom: 24,
+    textAlign: "center",
+  },
+  exitModalButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  exitModalButtonCancel: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: "#f5f5f5",
+    alignItems: "center",
+  },
+  exitModalButtonCancelText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#666",
+  },
+  exitModalButtonExit: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: "#FF6B6B",
+    alignItems: "center",
+  },
+  exitModalButtonExitText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#fff",
   },
   searchContainer: {
     paddingHorizontal: 16,
@@ -1442,6 +1637,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 160,
   },
+
   outOfStockBadge: {
     position: "absolute",
     top: 8,
@@ -1561,7 +1757,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
   },
-
   horizontalSection: {
     paddingVertical: 16,
     backgroundColor: "#fff",
@@ -1687,6 +1882,122 @@ const styles = StyleSheet.create({
   pageDots: {
     fontSize: 14,
     color: "#999",
+  },
+  selectedBrandBanner: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#50C878",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  selectedBrandInfo: {
+    flex: 1,
+  },
+  selectedBrandLabel: {
+    fontSize: 12,
+    color: "#fff",
+    opacity: 0.9,
+    marginBottom: 2,
+  },
+  selectedBrandName: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#fff",
+  },
+  clearBrandButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  brandsSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: "#fff",
+    marginBottom: 8,
+  },
+  brandsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  brandsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginHorizontal: -6,
+  },
+  brandCard: {
+    width: "23%",
+    marginHorizontal: "1%",
+    marginBottom: 12,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 12,
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: "#f0f0f0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  brandCardActive: {
+    borderColor: "#50C878",
+    backgroundColor: "#f0fdf4",
+    shadowColor: "#50C878",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  brandImageContainer: {
+    width: 50,
+    height: 50,
+    marginBottom: 8,
+    borderRadius: 25,
+    overflow: "hidden",
+    backgroundColor: "#f9f9f9",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  brandImage: {
+    width: "100%",
+    height: "100%",
+  },
+  brandImagePlaceholder: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#50C878",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  brandInitial: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#fff",
+  },
+  brandName: {
+    fontSize: 11,
+    color: "#666",
+    textAlign: "center",
+    fontWeight: "500",
+  },
+  brandNameActive: {
+    color: "#50C878",
+    fontWeight: "600",
   },
 });
 

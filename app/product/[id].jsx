@@ -518,6 +518,8 @@ const ProductDetail = () => {
         <View style={styles.detailsCard}>
           <Text style={styles.productName}>{product.name}</Text>
           <Text style={styles.skuText}>SKU: {product.sku}</Text>
+          <Text style={styles.skuText}>Spec: {product.spec}</Text>
+          <Text style={styles.skuText}>Property: {product.property}</Text>
           <Text style={styles.expiryText}>
             Expiry Date: {product.expiryDate}
           </Text>

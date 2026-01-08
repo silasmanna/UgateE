@@ -16,7 +16,7 @@ import {
 import { AppState } from "react-native";
 
 // --- API CONFIGURATION ---
-const API_BASE_URL = "https://api-dev.allwecure.com";
+const API_BASE_URL = "https://api.allwecure.com";
 const LOGIN_API_URL = `${API_BASE_URL}/auth/buyer/login`;
 const REGISTER_API_URL = `${API_BASE_URL}/auth/buyer/register`;
 const REFRESH_TOKEN_URL = `${API_BASE_URL}/auth/refresh`;
@@ -25,7 +25,7 @@ const VERIFY_OTP_URL = `${API_BASE_URL}/auth/verify-otp`;
 const RESEND_OTP_URL = `${API_BASE_URL}/auth/resend-otp`;
 const PRODUCTS_URL = `${API_BASE_URL}/buyer/products`;
 const CATEGORIES_URL = `${API_BASE_URL}/categories`;
-
+const BRANDS_URL = `${API_BASE_URL}/brands`;
 const CHECKOUT_URL = `${API_BASE_URL}/buyer/orders`;
 const ORDERS_URL = `${API_BASE_URL}/buyer/orders`;
 const UPDATE_URL = `${API_BASE_URL}/buyers/account`;
@@ -183,6 +183,18 @@ export function AuthProvider({ children }) {
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const [categoriesError, setCategoriesError] = useState(null);
   const [productsError, setProductsError] = useState(null);
+  const [productsMeta, setProductsMeta] = useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 0,
+    hasNext: false,
+  });
+
+  // Brands state
+  const [brands, setBrands] = useState([]);
+  const [isLoadingBrands, setIsLoadingBrands] = useState(false);
+  const [brandsError, setBrandsError] = useState(null);
 
   // Orders State
   const [orders, setOrders] = useState([]);
@@ -301,34 +313,121 @@ export function AuthProvider({ children }) {
 
   // Initial check for stored tokens
   useEffect(() => {
-    async function loadTokens() {
+    async function initializeApp() {
       try {
+        console.log("🔄 Initializing auth state...");
+
         const storedAccessToken = await getToken("accessToken");
         const storedRefreshToken = await getToken("refreshToken");
         const storedUserData = await getUserData("userData");
+        const lastActive = await getLastActiveTime();
 
-        if (storedAccessToken && storedRefreshToken && storedUserData) {
-          console.log("✅ Restoring persistent session");
+        console.log(
+          "📱 Stored access token:",
+          storedAccessToken ? "✅ found" : "❌ not found"
+        );
+        console.log(
+          "📱 Stored refresh token:",
+          storedRefreshToken ? "✅ found" : "❌ not found"
+        );
+        console.log(
+          "📱 Stored user data:",
+          storedUserData ? "✅ found" : "❌ not found"
+        );
+
+        // If no tokens or user data, user is not logged in
+        if (!storedAccessToken || !storedRefreshToken || !storedUserData) {
+          console.log("❌ No valid session found");
+          setUser(null);
+          setIsLoading(false);
+          setHasCheckedAuth(true);
+          return;
+        }
+
+        // Check if session expired (30 days of inactivity)
+        const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+        if (lastActive && Date.now() - lastActive > THIRTY_DAYS) {
+          console.log("⏰ Session expired (30 days inactive)");
+          await clearAuthData();
+          setUser(null);
+          setIsLoading(false);
+          setHasCheckedAuth(true);
+          return;
+        }
+
+        // Verify token is still valid
+        console.log("🔍 Verifying token validity...");
+        const profileResponse = await fetch(`${API_BASE_URL}/auth/buyer/me`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${storedAccessToken}`,
+          },
+        });
+
+        if (!profileResponse.ok) {
+          console.log("❌ Token invalid or expired, attempting refresh...");
+
+          try {
+            // Try to refresh the token
+            const newAccessToken = await refreshAccessToken();
+
+            if (newAccessToken) {
+              console.log("✅ Token refreshed successfully");
+              // Token was refreshed, restore session with stored data
+              await saveLastActiveTime(Date.now());
+              setUser({
+                accessToken: newAccessToken,
+                refreshToken: storedRefreshToken,
+                ...storedUserData,
+              });
+
+              // Fetch initial data
+              fetchCategories();
+              fetchProducts();
+              fetchBrands();
+              fetchOrders();
+            } else {
+              throw new Error("Token refresh failed");
+            }
+          } catch (refreshError) {
+            console.log("❌ Token refresh failed, clearing session");
+            await clearAuthData();
+            setUser(null);
+            setIsLoading(false);
+            setHasCheckedAuth(true);
+            return;
+          }
+        } else {
+          // Token is valid, restore session
+          console.log("✅ Valid session found, restoring user state");
+          await saveLastActiveTime(Date.now());
           setUser({
             accessToken: storedAccessToken,
             refreshToken: storedRefreshToken,
             ...storedUserData,
           });
-        } else {
-          console.log("ℹ️ No stored session found");
-          setUser(null);
+
+          // Fetch initial data
+          fetchCategories();
+          fetchProducts();
+          fetchBrands();
+          fetchOrders();
         }
+
+        setIsLoading(false);
+        setHasCheckedAuth(true);
       } catch (error) {
-        console.error("❌ Failed to load stored tokens:", error);
+        console.error("❌ Initialize Auth Error:", error.message);
+        await clearAuthData();
         setUser(null);
-      } finally {
         setIsLoading(false);
         setHasCheckedAuth(true);
       }
     }
 
     if (isNavigationReady && !hasCheckedAuth) {
-      loadTokens();
+      initializeApp();
     }
   }, [isNavigationReady, hasCheckedAuth]);
 
@@ -405,9 +504,69 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Fetch Brands
+  const fetchBrands = async () => {
+    try {
+      setIsLoadingBrands(true);
+      setBrandsError(null);
+
+      const accessToken = await getToken("accessToken");
+
+      if (!accessToken) {
+        throw new Error("No access token available");
+      }
+
+      console.log("🏷️ Fetching brands...");
+      let response = await fetch(BRANDS_URL, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      // Handle token refresh if needed
+      if (response.status === 401) {
+        console.log("🔄 Token expired, refreshing for brands...");
+        const newAccessToken = await refreshAccessToken();
+
+        // Retry with new token
+        response = await fetch(BRANDS_URL, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${newAccessToken}`,
+          },
+        });
+      }
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Failed to fetch brands");
+      }
+
+      // Transform API brands to app format
+      const transformedBrands = result.data.map((brand) => ({
+        id: brand.id,
+        name: brand.name,
+        slug: brand.slug,
+        image: brand.image_url || null,
+      }));
+
+      setBrands(transformedBrands);
+      console.log(`✅ Fetched ${transformedBrands.length} brands`);
+    } catch (error) {
+      console.error("❌ Error fetching brands:", error);
+      setBrandsError(error.message);
+    } finally {
+      setIsLoadingBrands(false);
+    }
+  };
+
   // Fetch Products (Requires auth)
 
-  const fetchProducts = async () => {
+  const fetchProducts = async (page = 1, limit = 20) => {
     try {
       setIsLoadingProducts(true);
       setProductsError(null);
@@ -418,14 +577,17 @@ export function AuthProvider({ children }) {
         throw new Error("No access token available");
       }
 
-      console.log("🛍️ Fetching products...");
-      let response = await fetch(PRODUCTS_URL, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
+      console.log(`🛍️ Fetching products (page ${page}, limit ${limit})...`);
+      let response = await fetch(
+        `${PRODUCTS_URL}?page=${page}&limit=${limit}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
 
       // Handle token refresh if needed
       if (response.status === 401) {
@@ -433,7 +595,7 @@ export function AuthProvider({ children }) {
         const newAccessToken = await refreshAccessToken();
 
         // Retry with new token
-        response = await fetch(PRODUCTS_URL, {
+        response = await fetch(`${PRODUCTS_URL}?page=${page}&limit=${limit}`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -479,6 +641,8 @@ export function AuthProvider({ children }) {
           stockCount: product.stockCount,
           sold: product.sold || 0,
           brand: product.brand || "",
+          property: product.property,
+          spec: product.spec,
           sku: product.sku,
           accessLevel: product.accessLevel,
           meta: product.meta,
@@ -494,10 +658,24 @@ export function AuthProvider({ children }) {
       });
 
       setProducts(transformedProducts);
-      console.log(`✅ Fetched ${transformedProducts.length} products`);
+
+      // Store pagination metadata
+      setProductsMeta({
+        page: result.meta.page,
+        limit: result.meta.limit,
+        total: result.meta.total,
+        totalPages: result.meta.totalPages,
+        hasNext: result.meta.hasNext,
+      });
+
+      console.log(
+        `✅ Fetched ${transformedProducts.length} products (Page ${result.meta.page} of ${result.meta.totalPages})`
+      );
+      return { products: transformedProducts, meta: result.meta };
     } catch (error) {
       console.error("❌ Error fetching products:", error);
       setProductsError(error.message);
+      return { products: [], meta: null };
     } finally {
       setIsLoadingProducts(false);
     }
@@ -563,6 +741,8 @@ export function AuthProvider({ children }) {
         stockCount: product.stockCount,
         sold: product.sold,
         brand: product.brand,
+        property: product.property,
+        spec: product.spec,
         sku: product.sku,
         accessLevel: product.accessLevel,
         meta: product.meta,
@@ -643,7 +823,7 @@ export function AuthProvider({ children }) {
       // ⭐ CRITICAL MAPPING FIX FOR API RESPONSE ⭐
       const transformedOrders = apiOrders.map((order) => ({
         id: order.orderId,
-        orderNumber: order.orderId,
+        orderNumber: order.orderNumber,
         date: order.date,
         paymentStatus: order.paymentStatus,
         total: parseFloat(order.totalAmount),
@@ -672,7 +852,7 @@ export function AuthProvider({ children }) {
     setOrders,
     setIsLoadingOrders,
     setOrdersError,
-  ]); // ⭐ DEPENDENCY ARRAY IS KEY ⭐
+  ]);
 
   // CANCEL ORDERS LOGIC
   const cancelOrder = async (orderId) => {
@@ -732,6 +912,119 @@ export function AuthProvider({ children }) {
       throw error;
     }
   };
+
+  // INITIALIZE AUTH STATE - Check for existing session on app startup
+  const initializeAuth = async () => {
+    try {
+      console.log("🔄 Initializing auth state...");
+
+      // Get stored tokens and user data
+      const accessToken = await getToken("accessToken");
+      const refreshToken = await getToken("refreshToken");
+      const userData = await getUserData("userData");
+      const lastActiveTime = await getLastActiveTime();
+
+      console.log(
+        "📱 Stored access token:",
+        accessToken ? "✅ found" : "❌ not found"
+      );
+      console.log(
+        "📱 Stored refresh token:",
+        refreshToken ? "✅ found" : "❌ not found"
+      );
+      console.log(
+        "📱 Stored user data:",
+        userData ? "✅ found" : "❌ not found"
+      );
+
+      // If no tokens or user data, user is not logged in
+      if (!accessToken || !refreshToken || !userData) {
+        console.log("❌ No valid session found");
+        setUser(null);
+        setIsLoading(false);
+        return false;
+      }
+
+      // Check if session is still valid (optional: add expiry check)
+      // For example, auto-logout after 30 days of inactivity
+      const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
+      if (lastActiveTime && Date.now() - lastActiveTime > THIRTY_DAYS) {
+        console.log("⏰ Session expired (30 days inactive)");
+        // Clear storage
+        await saveToken("accessToken", null);
+        await saveToken("refreshToken", null);
+        await saveUserData("userData", null);
+        await saveLastActiveTime(null);
+        setUser(null);
+        setIsLoading(false);
+        return false;
+      }
+
+      // Verify token is still valid by making a request to profile endpoint
+      console.log("🔍 Verifying token validity...");
+      const profileResponse = await fetch(`${API_BASE_URL}/auth/buyer/me`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!profileResponse.ok) {
+        console.log("❌ Token invalid or expired");
+
+        // Try to refresh the token
+        console.log("🔄 Attempting to refresh token...");
+        const refreshSuccess = await refreshAccessToken(refreshToken);
+
+        if (!refreshSuccess) {
+          // Refresh failed, clear everything
+          await saveToken("accessToken", null);
+          await saveToken("refreshToken", null);
+          await saveUserData("userData", null);
+          await saveLastActiveTime(null);
+          setUser(null);
+          setIsLoading(false);
+          return false;
+        }
+
+        // Refresh succeeded, continue with restored session
+        console.log("✅ Token refreshed successfully");
+      }
+
+      // Token is valid, restore session
+      console.log("✅ Valid session found, restoring user state");
+
+      // Update last active time
+      await saveLastActiveTime(Date.now());
+
+      // Set user state
+      setUser({ accessToken, refreshToken, ...userData });
+
+      // Fetch initial data
+      console.log("📦 Fetching initial data...");
+      fetchCategories();
+      fetchProducts();
+      fetchBrands();
+      fetchOrders();
+
+      setIsLoading(false);
+      return true;
+    } catch (error) {
+      console.error("❌ Initialize Auth Error:", error.message);
+
+      // Clear everything on error
+      await saveToken("accessToken", null);
+      await saveToken("refreshToken", null);
+      await saveUserData("userData", null);
+      await saveLastActiveTime(null);
+
+      setUser(null);
+      setIsLoading(false);
+      return false;
+    }
+  };
+
   // --- CHECKOUT LOGIC ---
   const checkout = async (cartItems, shippingAddress, buyerNote = "") => {
     const MAX_RETRIES = 2;
@@ -1033,7 +1326,6 @@ export function AuthProvider({ children }) {
           params: { email: email },
         });
 
-        // Throw error to show message in login screen
         throw new Error(
           "Email not verified. Please verify your email to continue."
         );
@@ -1094,13 +1386,14 @@ export function AuthProvider({ children }) {
         await saveToken("accessToken", accessToken);
         await saveToken("refreshToken", refreshToken);
         await saveUserData("userData", minimalUserData);
-        await saveLastActiveTime(Date.now());
+        await saveLastActiveTime(Date.now()); // ✅ Save last active time
 
         setUser({ accessToken, refreshToken, ...minimalUserData });
 
         // Fetch products and categories after login
         fetchCategories();
         fetchProducts();
+        fetchBrands();
         fetchOrders();
 
         router.replace("/(tabs)");
@@ -1127,7 +1420,7 @@ export function AuthProvider({ children }) {
       await saveToken("accessToken", accessToken);
       await saveToken("refreshToken", refreshToken);
       await saveUserData("userData", userData);
-      await saveLastActiveTime(Date.now());
+      await saveLastActiveTime(Date.now()); // ✅ Save last active time
 
       setUser({ accessToken, refreshToken, ...userData });
       console.log("✅ Sign in successful, navigating...");
@@ -1135,6 +1428,7 @@ export function AuthProvider({ children }) {
       // Fetch products and categories after login
       fetchCategories();
       fetchProducts();
+      fetchBrands();
       fetchOrders();
 
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -1150,13 +1444,14 @@ export function AuthProvider({ children }) {
   // REFRESH USER DATA
   const refreshUserData = async () => {
     try {
-      const accessToken = await getToken("accessToken");
+      let accessToken = await getToken("accessToken");
 
       if (!accessToken) {
         throw new Error("No access token available");
       }
 
       console.log("👤 Refreshing user data...");
+      console.log("🔑 Using token:", accessToken.substring(0, 20) + "...");
 
       let response = await fetch(`${API_BASE_URL}/auth/buyer/me`, {
         method: "GET",
@@ -1166,25 +1461,55 @@ export function AuthProvider({ children }) {
         },
       });
 
+      console.log("📊 Profile response status:", response.status);
+
       // Handle token refresh if needed
       if (response.status === 401) {
         console.log("🔄 Token expired, refreshing for user data...");
-        const newAccessToken = await refreshAccessToken();
 
-        // Retry with new token
-        response = await fetch(`${API_BASE_URL}/auth/buyer/me`, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${newAccessToken}`,
-          },
-        });
+        try {
+          const newAccessToken = await refreshAccessToken();
+
+          if (!newAccessToken) {
+            throw new Error("Failed to refresh token");
+          }
+
+          // Retry with new token
+          response = await fetch(`${API_BASE_URL}/auth/buyer/me`, {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${newAccessToken}`,
+            },
+          });
+
+          console.log(
+            "📊 Profile response status after refresh:",
+            response.status
+          );
+          accessToken = newAccessToken;
+        } catch (refreshError) {
+          console.error("❌ Token refresh failed:", refreshError);
+          throw new Error("Session expired. Please log in again.");
+        }
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("❌ Profile fetch failed:", errorText);
+        throw new Error(`Failed to fetch profile: ${response.status}`);
       }
 
       const profileData = await response.json();
+      console.log(
+        "👤 Profile data received:",
+        JSON.stringify(profileData, null, 2)
+      );
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch user data");
+      // Check if the response has the expected structure
+      if (!profileData || (!profileData.id && !profileData.email)) {
+        console.error("❌ Invalid profile data structure:", profileData);
+        throw new Error("Invalid profile data received");
       }
 
       // Transform profile data
@@ -1203,16 +1528,30 @@ export function AuthProvider({ children }) {
         isBlocked: profileData.isBlocked || false,
       };
 
-      // Update state
-      setUser((prev) => ({ ...prev, ...userData }));
+      // Update state with new data while keeping tokens
+      setUser((prev) => ({
+        ...prev,
+        accessToken: accessToken, // Use the current valid token
+        ...userData,
+      }));
 
       // Update stored data
       await saveUserData("userData", userData);
+      await saveLastActiveTime(Date.now());
 
       console.log("✅ User data refreshed successfully");
       return userData;
     } catch (error) {
       console.error("❌ Error refreshing user data:", error);
+      console.error("❌ Error details:", error.message);
+
+      // Don't throw - return cached data instead
+      console.log("⚠️ Using cached user data");
+      const cachedData = await getUserData("userData");
+      if (cachedData) {
+        return cachedData;
+      }
+
       throw error;
     }
   };
@@ -1616,7 +1955,13 @@ export function AuthProvider({ children }) {
     productsError,
     fetchCategories,
     fetchProducts,
+    productsMeta,
     fetchProductById,
+    // Brands
+    brands,
+    isLoadingBrands,
+    brandsError,
+    fetchBrands,
     // Orders
     orders,
     isLoadingOrders,

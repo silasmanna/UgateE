@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   Calendar,
   ChevronDown,
   Filter,
@@ -7,7 +6,7 @@ import {
   RefreshCw,
   X,
 } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -48,9 +47,10 @@ const mapApiOrderToLocalOrder = (apiOrder) => {
   });
 
   return {
-    id: apiOrder.id,
+    id: apiOrder.orderId,
+    orderNumber: apiOrder.orderNumber,
     date: apiOrder.date,
-    total: apiOrder.total,
+    total: apiOrder.total || 0,
     status: status,
     items: (apiOrder.items || []).length,
     products: productsList,
@@ -72,10 +72,79 @@ const OrdersScreen = () => {
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
+  // Add ref for ScrollView
+  const scrollViewRef = useRef(null);
+
+  // Fetch orders on mount
   useEffect(() => {
-    fetchOrders();
+    if (orders.length === 0 && !isLoadingOrders && !ordersError) {
+      fetchOrders();
+    }
   }, []);
+
+  // Transform API orders to local format
+  const allOrders = orders ? orders.map(mapApiOrderToLocalOrder) : [];
+
+  // Filter orders based on current filters
+  const getFilteredOrders = useCallback(() => {
+    let filtered = [...allOrders];
+
+    // Apply status filter
+    if (selectedFilter !== "All") {
+      filtered = filtered.filter((order) => order.status === selectedFilter);
+    }
+
+    // Apply date filter
+    if (selectedDateRange !== "All Time") {
+      filtered = filtered.filter((order) => {
+        if (!order.date) return false;
+
+        const orderDate = new Date(order.date);
+        const now = new Date();
+        const diffDays = Math.floor(
+          (now.getTime() - orderDate.getTime()) / (1000 * 60 * 60 * 24)
+        );
+
+        switch (selectedDateRange) {
+          case "Last 7 Days":
+            return diffDays <= 7;
+          case "Last 30 Days":
+            return diffDays <= 30;
+          case "Last 3 Months":
+            return diffDays <= 90;
+          case "Last 6 Months":
+            return diffDays <= 180;
+          default:
+            return true;
+        }
+      });
+    }
+
+    return filtered;
+  }, [allOrders, selectedFilter, selectedDateRange]);
+
+  const filteredOrders = getFilteredOrders();
+  const totalOrders = filteredOrders.length;
+  const totalPages = Math.ceil(totalOrders / itemsPerPage) || 1;
+
+  // Get current page of orders
+  const getCurrentPageOrders = useCallback(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredOrders.slice(startIndex, endIndex);
+  }, [filteredOrders, currentPage, itemsPerPage]);
+
+  const currentPageOrders = getCurrentPageOrders();
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    if (currentPage !== 1) {
+      setCurrentPage(1);
+    }
+  }, [selectedFilter, selectedDateRange]);
 
   const handleRefreshOrders = async () => {
     setIsRefreshing(true);
@@ -83,6 +152,16 @@ const OrdersScreen = () => {
       await fetchOrders();
     } finally {
       setIsRefreshing(false);
+    }
+  };
+
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+      // Scroll to top when page changes
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      }, 100);
     }
   };
 
@@ -107,6 +186,8 @@ const OrdersScreen = () => {
                 "Success",
                 result.message || "Order cancelled successfully"
               );
+              // Refresh orders after cancellation
+              await fetchOrders();
             } catch (error) {
               Alert.alert(
                 "Error",
@@ -136,35 +217,6 @@ const OrdersScreen = () => {
     "Last 3 Months",
     "Last 6 Months",
   ];
-
-  const allOrders = orders ? orders.map(mapApiOrderToLocalOrder) : [];
-
-  const filteredOrders = allOrders.filter((order) => {
-    if (selectedFilter !== "All" && order.status !== selectedFilter) {
-      return false;
-    }
-
-    if (!order.date) return true;
-
-    const orderDate = new Date(order.date);
-    const now = new Date();
-    const diffDays = Math.floor(
-      (now.getTime() - orderDate.getTime()) / (1000 * 60 * 60 * 24)
-    );
-
-    switch (selectedDateRange) {
-      case "Last 7 Days":
-        return diffDays <= 7;
-      case "Last 30 Days":
-        return diffDays <= 30;
-      case "Last 3 Months":
-        return diffDays <= 90;
-      case "Last 6 Months":
-        return diffDays <= 180;
-      default:
-        return true;
-    }
-  });
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -244,9 +296,6 @@ const OrdersScreen = () => {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton}>
-          <ArrowLeft size={24} color="#000" />
-        </TouchableOpacity>
         <Text style={styles.headerTitle}>My Orders</Text>
         <View style={styles.headerRight} />
       </View>
@@ -288,8 +337,13 @@ const OrdersScreen = () => {
       {/* Orders Count */}
       <View style={styles.ordersCount}>
         <Text style={styles.ordersCountText}>
-          {filteredOrders.length}{" "}
-          {filteredOrders.length === 1 ? "Order" : "Orders"}
+          {totalOrders} {totalOrders === 1 ? "Order" : "Orders"}
+          {totalPages > 1 && (
+            <Text style={styles.paginationInfo}>
+              {" "}
+              (Page {currentPage} of {totalPages})
+            </Text>
+          )}
         </Text>
       </View>
 
@@ -311,10 +365,11 @@ const OrdersScreen = () => {
         </View>
       ) : (
         <ScrollView
+          ref={scrollViewRef}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          {filteredOrders.length === 0 ? (
+          {currentPageOrders.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateTitle}>No orders found</Text>
               <Text style={styles.emptyStateText}>
@@ -322,99 +377,194 @@ const OrdersScreen = () => {
               </Text>
             </View>
           ) : (
-            <View style={styles.ordersList}>
-              {filteredOrders.map((order) => (
-                <TouchableOpacity
-                  key={order.id}
-                  style={[
-                    styles.orderCard,
-                    { borderLeftColor: getStatusColor(order.status) },
-                  ]}
-                  onPress={() => handleOrderClick(order)}
-                >
-                  <View style={styles.orderHeader}>
-                    <View>
-                      <Text style={styles.orderId}>{order.id}</Text>
-                      <Text style={styles.orderDate}>
-                        {formatDate(order.date)}
-                      </Text>
-                    </View>
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        {
-                          backgroundColor: getStatusBackgroundColor(
-                            order.status
-                          ),
-                        },
-                      ]}
-                    >
-                      <Text
+            <>
+              <View style={styles.ordersList}>
+                {currentPageOrders.map((order) => (
+                  <TouchableOpacity
+                    key={order.id}
+                    style={[
+                      styles.orderCard,
+                      { borderLeftColor: getStatusColor(order.status) },
+                    ]}
+                    onPress={() => handleOrderClick(order)}
+                  >
+                    <View style={styles.orderHeader}>
+                      <View>
+                        <Text style={styles.orderId}>
+                          Order No. {order.orderNumber}
+                        </Text>
+                        <Text style={styles.orderDate}>
+                          {formatDate(order.date)}
+                        </Text>
+                      </View>
+                      <View
                         style={[
-                          styles.statusText,
-                          { color: getStatusColor(order.status) },
+                          styles.statusBadge,
+                          {
+                            backgroundColor: getStatusBackgroundColor(
+                              order.status
+                            ),
+                          },
                         ]}
                       >
-                        {order.status}
+                        <Text
+                          style={[
+                            styles.statusText,
+                            { color: getStatusColor(order.status) },
+                          ]}
+                        >
+                          {order.status}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Product Images Preview */}
+                    {order.fullItems && order.fullItems.length > 0 && (
+                      <View style={styles.productImagesPreview}>
+                        {order.fullItems.slice(0, 3).map((item, index) => {
+                          const imageUrl = getItemImage(item);
+                          return (
+                            <View
+                              key={item.itemId || index}
+                              style={[
+                                styles.productImageWrapper,
+                                index > 0 && { marginLeft: -8 },
+                              ]}
+                            >
+                              {imageUrl ? (
+                                <Image
+                                  source={{ uri: imageUrl }}
+                                  style={styles.productImagePreview}
+                                  resizeMode="cover"
+                                />
+                              ) : (
+                                <View style={styles.productImagePlaceholder}>
+                                  <Text style={styles.placeholderEmoji}>
+                                    💊
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                          );
+                        })}
+                        {order.fullItems.length > 3 && (
+                          <View style={styles.moreImagesIndicator}>
+                            <Text style={styles.moreImagesText}>
+                              +{order.fullItems.length - 3}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    <View style={styles.orderDetails}>
+                      <Text style={styles.orderItems}>
+                        {order.items} {order.items === 1 ? "item" : "items"}
+                      </Text>
+                      <Text style={styles.orderProducts} numberOfLines={1}>
+                        {order.products.join(", ")}
                       </Text>
                     </View>
-                  </View>
 
-                  {/* Product Images Preview */}
-                  {order.fullItems && order.fullItems.length > 0 && (
-                    <View style={styles.productImagesPreview}>
-                      {order.fullItems.slice(0, 3).map((item, index) => {
-                        const imageUrl = getItemImage(item);
-                        return (
-                          <View
-                            key={item.itemId || index}
-                            style={[
-                              styles.productImageWrapper,
-                              index > 0 && { marginLeft: -8 },
-                            ]}
-                          >
-                            {imageUrl ? (
-                              <Image
-                                source={{ uri: imageUrl }}
-                                style={styles.productImagePreview}
-                                resizeMode="cover"
-                              />
-                            ) : (
-                              <View style={styles.productImagePlaceholder}>
-                                <Text style={styles.placeholderEmoji}>💊</Text>
-                              </View>
-                            )}
-                          </View>
-                        );
-                      })}
-                      {order.fullItems.length > 3 && (
-                        <View style={styles.moreImagesIndicator}>
-                          <Text style={styles.moreImagesText}>
-                            +{order.fullItems.length - 3}
-                          </Text>
-                        </View>
-                      )}
+                    <View style={styles.orderFooter}>
+                      <Text style={styles.totalLabel}>Total:</Text>
+                      <Text style={styles.totalAmount}>
+                        {formatPrice(order.total)}
+                      </Text>
                     </View>
-                  )}
+                  </TouchableOpacity>
+                ))}
+              </View>
 
-                  <View style={styles.orderDetails}>
-                    <Text style={styles.orderItems}>
-                      {order.items} {order.items === 1 ? "item" : "items"}
+              {/* Pagination Controls */}
+              {totalOrders > 0 && (
+                <View style={styles.paginationContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.paginationButton,
+                      currentPage === 1 && styles.paginationButtonDisabled,
+                    ]}
+                    onPress={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1 || isLoadingOrders}
+                  >
+                    <Text
+                      style={[
+                        styles.paginationButtonText,
+                        currentPage === 1 &&
+                          styles.paginationButtonTextDisabled,
+                      ]}
+                    >
+                      Previous
                     </Text>
-                    <Text style={styles.orderProducts} numberOfLines={1}>
-                      {order.products.join(", ")}
-                    </Text>
+                  </TouchableOpacity>
+
+                  <View style={styles.pageNumbers}>
+                    {Array.from(
+                      { length: totalPages },
+                      (_, index) => index + 1
+                    ).map((page) => {
+                      if (
+                        page === 1 ||
+                        page === totalPages ||
+                        (page >= currentPage - 1 && page <= currentPage + 1)
+                      ) {
+                        return (
+                          <TouchableOpacity
+                            key={page}
+                            style={[
+                              styles.pageNumber,
+                              currentPage === page && styles.pageNumberActive,
+                            ]}
+                            onPress={() => handlePageChange(page)}
+                            disabled={isLoadingOrders}
+                          >
+                            <Text
+                              style={[
+                                styles.pageNumberText,
+                                currentPage === page &&
+                                  styles.pageNumberTextActive,
+                              ]}
+                            >
+                              {page}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      } else if (
+                        page === currentPage - 2 ||
+                        page === currentPage + 2
+                      ) {
+                        return (
+                          <Text key={page} style={styles.pageDots}>
+                            ...
+                          </Text>
+                        );
+                      }
+                      return null;
+                    })}
                   </View>
 
-                  <View style={styles.orderFooter}>
-                    <Text style={styles.totalLabel}>Total:</Text>
-                    <Text style={styles.totalAmount}>
-                      {formatPrice(order.total)}
+                  <TouchableOpacity
+                    style={[
+                      styles.paginationButton,
+                      currentPage === totalPages &&
+                        styles.paginationButtonDisabled,
+                    ]}
+                    onPress={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages || isLoadingOrders}
+                  >
+                    <Text
+                      style={[
+                        styles.paginationButtonText,
+                        currentPage === totalPages &&
+                          styles.paginationButtonTextDisabled,
+                      ]}
+                    >
+                      Next
                     </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </>
           )}
         </ScrollView>
       )}
@@ -522,9 +672,9 @@ const OrdersScreen = () => {
                 {/* Order ID and Status */}
                 <View style={styles.orderModalSection}>
                   <View style={styles.orderModalRow}>
-                    <Text style={styles.orderModalLabel}>Order ID</Text>
+                    <Text style={styles.orderModalLabel}>Order Number</Text>
                     <Text style={styles.orderModalValue}>
-                      {selectedOrder.id}
+                      {selectedOrder.orderNumber}
                     </Text>
                   </View>
                   <View style={styles.orderModalRow}>
@@ -797,6 +947,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#666",
     fontWeight: "500",
+  },
+  paginationInfo: {
+    color: "#999",
   },
   scrollContent: {
     paddingBottom: 80,
@@ -1160,6 +1313,60 @@ const styles = StyleSheet.create({
     color: "#444",
     fontStyle: "italic",
     lineHeight: 20,
+  },
+  // Pagination styles - UPDATED with green theme
+  paginationContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingTop: 24,
+    paddingBottom: 16,
+  },
+  paginationButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "#50C878", // Changed to green
+    borderRadius: 8,
+  },
+  paginationButtonDisabled: {
+    backgroundColor: "#E0E0E0",
+  },
+  paginationButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  paginationButtonTextDisabled: {
+    color: "#999",
+  },
+  pageNumbers: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  pageNumber: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#F5F5F5",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pageNumberActive: {
+    backgroundColor: "#50C878", // Changed to green
+  },
+  pageNumberText: {
+    fontSize: 14,
+    color: "#666",
+    fontWeight: "600",
+  },
+  pageNumberTextActive: {
+    color: "#fff",
+  },
+  pageDots: {
+    fontSize: 14,
+    color: "#999",
   },
 });
 

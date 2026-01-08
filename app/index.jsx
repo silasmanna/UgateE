@@ -17,12 +17,17 @@ export default function Index() {
   const { user, isLoading } = useAuth();
 
   // Check if user has valid session
-  const isAuthenticated = user !== null && user?.token;
+  const isAuthenticated = user !== null && user?.accessToken;
 
   // Auto-redirect authenticated users to homepage
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      router.replace("/(tabs)");
+      // Small delay to ensure navigation is ready
+      const timer = setTimeout(() => {
+        router.replace("/(tabs)");
+      }, 100);
+
+      return () => clearTimeout(timer);
     }
   }, [isLoading, isAuthenticated]);
 
@@ -106,7 +111,7 @@ export default function Index() {
       {/* Footer */}
       <View style={styles.footer}>
         <Text style={styles.footerText}>
-          © 2024 Allwecure Pharmaceuticals Nigeria Ltd
+          © 2025 Allwecure Pharmaceuticals Nigeria Ltd
         </Text>
       </View>
     </SafeAreaView>

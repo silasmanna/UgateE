@@ -17,7 +17,7 @@ The application incorporates strict regulatory compliance features, ensuring tha
 ### 🔐 User Management & Security
 
 - **Authentication:** Secure Login, Registration, and Password Recovery (Forgot/Reset Password).
-- **OTP Verification:** Phone/Email verification using One-Time Passwords.
+- **OTP Verification:** Email verification using One-Time Passwords.
 - **Profile Management:** Edit profile details and manage account settings.
 - **KYC Verification:** Identity verification system for users.
 

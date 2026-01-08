@@ -2,7 +2,7 @@
 import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 
-const API_BASE_URL = "https://api-dev.allwecure.com";
+const API_BASE_URL = "https://api.allwecure.com";
 
 // Helper functions
 const getAccessToken = async () => {

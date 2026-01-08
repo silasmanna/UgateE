@@ -3,8 +3,8 @@
 // For development, you might use: http://192.168.1.100:8000/v1
 // For production, you might use: https://api.yourdomain.com/v1
 export const API_BASE_URL = __DEV__
-  ? "http://192.168.1.100:8000/v1" // Development URL
-  : "https://api.yourdomain.com/v1"; // Production URL
+  ? "http://192.168.1.100:8000/" // Development URL
+  : "https://api.allwecure.com/"; // Production URL
 
 // Toggle for testing without API
 export const USE_MOCK_DATA = false;
