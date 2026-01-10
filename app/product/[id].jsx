@@ -564,12 +564,6 @@ const ProductDetail = () => {
             <Text style={styles.priceLabel}>Price per unit</Text>
             <View style={styles.priceContainer}>
               <Text style={styles.price}>{formatPrice(product.price)}</Text>
-              {product.originalPrice &&
-                product.originalPrice !== product.price && (
-                  <Text style={styles.originalPrice}>
-                    {formatPrice(product.originalPrice)}
-                  </Text>
-                )}
             </View>
           </View>
 

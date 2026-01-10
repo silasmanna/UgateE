@@ -165,7 +165,7 @@ const OrdersScreen = () => {
     }
   };
 
-  const handleCancelOrder = (orderId) => {
+  const handleCancelOrder = (Id) => {
     Alert.alert(
       "Cancel Order",
       "Are you sure you want to cancel this order? This action cannot be undone.",
@@ -180,7 +180,7 @@ const OrdersScreen = () => {
           onPress: async () => {
             setIsCancelling(true);
             try {
-              const result = await cancelOrder(orderId);
+              const result = await cancelOrder(Id);
               setShowOrderModal(false);
               Alert.alert(
                 "Success",
