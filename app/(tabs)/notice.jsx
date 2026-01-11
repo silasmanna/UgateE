@@ -391,7 +391,7 @@ const OrdersScreen = () => {
                     <View style={styles.orderHeader}>
                       <View>
                         <Text style={styles.orderId}>
-                          Order No. {order.orderNumber}
+                          ORD-00{order.orderNumber}
                         </Text>
                         <Text style={styles.orderDate}>
                           {formatDate(order.date)}
@@ -672,7 +672,7 @@ const OrdersScreen = () => {
                 {/* Order ID and Status */}
                 <View style={styles.orderModalSection}>
                   <View style={styles.orderModalRow}>
-                    <Text style={styles.orderModalLabel}>Order Number</Text>
+                    <Text style={styles.orderModalLabel}>ORD-00</Text>
                     <Text style={styles.orderModalValue}>
                       {selectedOrder.orderNumber}
                     </Text>
