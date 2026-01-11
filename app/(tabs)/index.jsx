@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { router, useFocusEffect, usePathname } from "expo-router";
 import {
   ChevronRight,
   Minus,
@@ -81,19 +81,36 @@ const MedicineHomepage = () => {
   } = useAuth();
 
   // Handle back button press
-  useEffect(() => {
-    const backAction = () => {
-      setShowExitModal(true);
-      return true; // Prevent default back behavior
-    };
 
-    const backHandler = BackHandler.addEventListener(
-      "hardwareBackPress",
-      backAction
-    );
+  const pathname = usePathname();
+  // Handle back button press - ONLY when on home screen
+  useFocusEffect(
+    useCallback(() => {
+      const backAction = () => {
+        // Check if we're actually on the home tab
+        const isOnHomeTab =
+          pathname === "/(tabs)" ||
+          pathname === "/(tabs)/" ||
+          pathname === "/(tabs)/index";
 
-    return () => backHandler.remove();
-  }, []);
+        if (isOnHomeTab) {
+          setShowExitModal(true);
+          return true; // Prevent default back behavior and show exit modal
+        }
+
+        // If not on home tab, allow default back navigation
+        return false;
+      };
+
+      const backHandler = BackHandler.addEventListener(
+        "hardwareBackPress",
+        backAction
+      );
+
+      // Cleanup on unmount or when screen loses focus
+      return () => backHandler.remove();
+    }, [pathname])
+  );
 
   const handleExitApp = () => {
     setShowExitModal(false);

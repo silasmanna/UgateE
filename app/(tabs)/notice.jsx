@@ -47,7 +47,7 @@ const mapApiOrderToLocalOrder = (apiOrder) => {
   });
 
   return {
-    id: apiOrder.orderId,
+    id: apiOrder.id || apiOrder.orderId,
     orderNumber: apiOrder.orderNumber,
     date: apiOrder.date,
     total: apiOrder.total || 0,
@@ -165,7 +165,7 @@ const OrdersScreen = () => {
     }
   };
 
-  const handleCancelOrder = (Id) => {
+  const handleCancelOrder = (orderId) => {
     Alert.alert(
       "Cancel Order",
       "Are you sure you want to cancel this order? This action cannot be undone.",
@@ -180,7 +180,7 @@ const OrdersScreen = () => {
           onPress: async () => {
             setIsCancelling(true);
             try {
-              const result = await cancelOrder(Id);
+              const result = await cancelOrder(orderId);
               setShowOrderModal(false);
               Alert.alert(
                 "Success",
