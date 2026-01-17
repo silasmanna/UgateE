@@ -8,10 +8,11 @@ import {
   ShoppingCart,
   Star,
 } from "lucide-react-native";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   Image,
   ScrollView,
   StatusBar,
@@ -48,6 +49,8 @@ const ProductDetail = () => {
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [isUpdatingQuantity, setIsUpdatingQuantity] = useState(false);
   const [showKYCModal, setShowKYCModal] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const scrollViewRef = useRef(null);
 
   useEffect(() => {
     setLoading(true);
@@ -74,6 +77,22 @@ const ProductDetail = () => {
   const isUserVerified = () => {
     if (!user) return false;
     return user.verified === true || user.verification_status === "VERIFIED";
+  };
+
+  const getProductImages = (product) => {
+    if (!product) return [];
+
+    // Check if image_url exists and is an array
+    if (product.image_url && Array.isArray(product.image_url)) {
+      return product.image_url.filter((img) => img && img.trim().length > 0);
+    }
+
+    // Fallback to single image if it exists
+    if (product.image && typeof product.image === "string") {
+      return [product.image];
+    }
+
+    return [];
   };
 
   // Check if user can access a product based on access level
@@ -203,7 +222,12 @@ const ProductDetail = () => {
       return newQuantity;
     });
   };
-
+  const handleScroll = (event) => {
+    const scrollPosition = event.nativeEvent.contentOffset.x;
+    const imageWidth = event.nativeEvent.layoutMeasurement.width;
+    const index = Math.round(scrollPosition / imageWidth);
+    setCurrentImageIndex(index);
+  };
   const handleQuantityInputChange = (text) => {
     // Only allow numbers
     const numericText = text.replace(/[^0-9]/g, "");
@@ -434,17 +458,51 @@ const ProductDetail = () => {
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Product Image */}
-        <View style={styles.imageContainer}>
-          {/* Handle URL images */}
-          {product.image ? (
-            <Image
-              source={{ uri: product.image }}
-              style={styles.productImageActual}
-              resizeMode="contain"
-            />
-          ) : (
-            <Text style={styles.imagePlaceholder}>💊</Text>
+
+        {/* Product Image Carousel */}
+        <View style={styles.imageCarouselContainer}>
+          <ScrollView
+            ref={scrollViewRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+            style={styles.imageCarousel}
+          >
+            {getProductImages(product).length > 0 ? (
+              getProductImages(product).map((imageUrl, index) => (
+                <View key={index} style={styles.imageSlide}>
+                  <Image
+                    source={{ uri: imageUrl }}
+                    style={styles.productImageActual}
+                    resizeMode="contain"
+                  />
+                </View>
+              ))
+            ) : (
+              <View style={styles.imageSlide}>
+                <Text style={styles.imagePlaceholder}>💊</Text>
+              </View>
+            )}
+          </ScrollView>
+
+          {/* Image Indicators */}
+          {getProductImages(product).length > 1 && (
+            <View style={styles.imageIndicators}>
+              {getProductImages(product).map((_, index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.indicator,
+                    currentImageIndex === index && styles.indicatorActive,
+                  ]}
+                />
+              ))}
+            </View>
           )}
+
+          {/* Badges */}
           {discount > 0 && (
             <View style={styles.discountBadge}>
               <Text style={styles.discountText}>{discount}% OFF</Text>
@@ -525,12 +583,6 @@ const ProductDetail = () => {
           </Text>
 
           <View style={styles.ratingRow}>
-            <View style={styles.starsContainer}>
-              {renderStars(product.rating || 0)}
-            </View>
-            <Text style={styles.ratingText}>
-              {product.rating || 0} ({product.reviews || 0} reviews)
-            </Text>
             {product.sold > 0 && (
               <Text style={styles.soldText}> • {product.sold} sold</Text>
             )}
@@ -564,6 +616,11 @@ const ProductDetail = () => {
             <Text style={styles.priceLabel}>Price per unit</Text>
             <View style={styles.priceContainer}>
               <Text style={styles.price}>{formatPrice(product.price)}</Text>
+            </View>
+            <View style={styles.price}>
+              <Text style={styles.originalPrice}>
+                {formatPrice(product.originalPrice)}
+              </Text>
             </View>
           </View>
 
@@ -744,10 +801,17 @@ const ProductDetail = () => {
                             </View>
                           )}
                         {suggestedProduct.originalPrice &&
-                          suggestedProduct.discount > 0 && (
+                          suggestedProduct.originalPrice >
+                            suggestedProduct.price && (
                             <View style={styles.discountBadgeSmall}>
                               <Text style={styles.discountTextSmall}>
-                                {Math.round(suggestedProduct.discount)}%
+                                {Math.round(
+                                  (1 -
+                                    suggestedProduct.price /
+                                      suggestedProduct.originalPrice) *
+                                    100
+                                )}
+                                %
                               </Text>
                             </View>
                           )}
@@ -1503,6 +1567,41 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "bold",
+  },
+  imageCarouselContainer: {
+    height: 280,
+    backgroundColor: "#fff",
+    position: "relative",
+    marginBottom: 8,
+  },
+  imageCarousel: {
+    flex: 1,
+  },
+  imageSlide: {
+    width: Dimensions.get("window").width,
+    height: 280,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  imageIndicators: {
+    position: "absolute",
+    bottom: 16,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
+  },
+  indicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "rgba(255, 255, 255, 0.5)",
+  },
+  indicatorActive: {
+    backgroundColor: "#fff",
+    width: 24,
   },
 });
 

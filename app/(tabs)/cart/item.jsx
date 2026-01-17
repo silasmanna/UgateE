@@ -45,10 +45,19 @@ const CartScreen = () => {
     return getCartTotal();
   };
 
-  const total = calculateSubtotal(); // No shipping fee
+  const calculateShipping = (subtotal) => {
+    return subtotal * 0.025; // 2.5% of subtotal
+  };
+
+  const subtotal = calculateSubtotal();
+  const shipping = calculateShipping(subtotal);
+  const total = subtotal + shipping;
 
   const formatPrice = (price) => {
-    return `₦${price.toLocaleString()}`;
+    return `₦${price.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
   };
   // --------------------
 
@@ -360,9 +369,12 @@ const CartScreen = () => {
                   {cartItems.reduce((sum, item) => sum + item.quantity, 0)}{" "}
                   items)
                 </Text>
-                <Text style={styles.summaryValue}>
-                  {formatPrice(calculateSubtotal())}
-                </Text>
+                <Text style={styles.summaryValue}>{formatPrice(subtotal)}</Text>
+              </View>
+
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Shipping (2.5%)</Text>
+                <Text style={styles.summaryValue}>{formatPrice(shipping)}</Text>
               </View>
 
               <View style={styles.divider} />

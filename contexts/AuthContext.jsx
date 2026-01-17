@@ -633,16 +633,25 @@ export function AuthProvider({ children }) {
             ? parseFloat(product.originalPrice)
             : null,
           discount: product.discount ? parseFloat(product.discount) : 0,
+          // 🔥 KEEP FIRST IMAGE FOR THUMBNAILS
           image:
             product.image_url && product.image_url[0]
               ? product.image_url[0]
               : null,
+          // 🔥 ADD FULL IMAGE ARRAY FOR CAROUSEL
+          image_url:
+            product.image_url && Array.isArray(product.image_url)
+              ? product.image_url
+              : product.image_url && product.image_url[0]
+              ? [product.image_url[0]]
+              : [],
           inStock: product.inStock,
           stockCount: product.stockCount,
           sold: product.sold || 0,
           brand: product.brand || "",
           property: product.property,
           spec: product.spec,
+          location: product.location,
           sku: product.sku,
           accessLevel: product.accessLevel,
           meta: product.meta,
@@ -682,6 +691,7 @@ export function AuthProvider({ children }) {
   };
 
   // Fetch single product by ID (Requires auth)
+
   const fetchProductById = async (productId) => {
     try {
       const accessToken = await getToken("accessToken");
@@ -723,6 +733,18 @@ export function AuthProvider({ children }) {
       const product = result.data;
       console.log(product);
 
+      // Safely extract category name
+      let categoryName = "Uncategorized";
+      if (
+        product.categories &&
+        Array.isArray(product.categories) &&
+        product.categories.length > 0
+      ) {
+        if (product.categories[0] && product.categories[0].name) {
+          categoryName = product.categories[0].name;
+        }
+      }
+
       // Transform to app format
       const transformedProduct = {
         id: product.id,
@@ -733,15 +755,24 @@ export function AuthProvider({ children }) {
           ? parseFloat(product.originalPrice)
           : null,
         discount: product.discount ? parseFloat(product.discount) : 0,
+        // 🔥 KEEP FIRST IMAGE FOR THUMBNAILS
         image:
           product.image_url && product.image_url[0]
             ? product.image_url[0]
             : null,
+        // 🔥 ADD FULL IMAGE ARRAY FOR CAROUSEL
+        image_url:
+          product.image_url && Array.isArray(product.image_url)
+            ? product.image_url
+            : product.image_url && product.image_url[0]
+            ? [product.image_url[0]]
+            : [],
         inStock: product.inStock,
         stockCount: product.stockCount,
         sold: product.sold,
         brand: product.brand,
         property: product.property,
+        location: product.location,
         spec: product.spec,
         sku: product.sku,
         accessLevel: product.accessLevel,
@@ -749,7 +780,7 @@ export function AuthProvider({ children }) {
         expiryDate: product.expiry_date
           ? new Date(product.expiry_date).toLocaleDateString("en-GB")
           : null,
-        category: product.categories[0].name,
+        category: categoryName,
         rating: 4.5,
         reviews: product.sold || 0,
       };

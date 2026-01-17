@@ -1,12 +1,13 @@
 import { router, useFocusEffect, usePathname } from "expo-router";
 import {
+  ChevronDown,
   ChevronRight,
+  MapPin,
   Minus,
   Plus,
   RefreshCw,
   Search,
   ShieldAlert,
-  Star,
   X,
 } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -34,12 +35,55 @@ const MedicineHomepage = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [showAllCategories, setShowAllCategories] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState("All");
+  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
   const [selectedFilter, setSelectedFilter] = useState("Home");
+
+  // Nigerian states list
+  const NIGERIAN_STATES = [
+    "Abia",
+    "Adamawa",
+    "Akwa Ibom",
+    "Anambra",
+    "Bauchi",
+    "Bayelsa",
+    "Benue",
+    "Borno",
+    "Cross River",
+    "Delta",
+    "Ebonyi",
+    "Edo",
+    "Ekiti",
+    "Enugu",
+    "FCT (Abuja)",
+    "Gombe",
+    "Imo",
+    "Jigawa",
+    "Kaduna",
+    "Kano",
+    "Katsina",
+    "Kebbi",
+    "Kogi",
+    "Kwara",
+    "Lagos",
+    "Nasarawa",
+    "Niger",
+    "Ogun",
+    "Ondo",
+    "Osun",
+    "Oyo",
+    "Plateau",
+    "Rivers",
+    "Sokoto",
+    "Taraba",
+    "Yobe",
+    "Zamfara",
+  ];
 
   const filterTabs = [
     { id: "Home", label: "Home", icon: "🏠" },
@@ -48,6 +92,7 @@ const MedicineHomepage = () => {
     { id: "Brand", label: "Brand", icon: "⭐" },
     { id: "New", label: "New", icon: "✨" },
   ];
+
   // Loading states
   const [isCategoryLoading, setIsCategoryLoading] = useState(false);
   const [isViewAllLoading, setIsViewAllLoading] = useState(false);
@@ -80,10 +125,7 @@ const MedicineHomepage = () => {
     fetchBrands,
   } = useAuth();
 
-  // Handle back button press
-
-  const pathname = usePathname();
-  // Handle back button press - ONLY when on home screen
+  const pathname = usePathname(); // Handle back button press - ONLY when on home screen
   useFocusEffect(
     useCallback(() => {
       const backAction = () => {
@@ -139,10 +181,33 @@ const MedicineHomepage = () => {
     fetchProducts(currentPage, itemsPerPage);
   }, [currentPage]);
 
+  // Get available locations from products
+  const getAvailableLocations = useCallback(() => {
+    const locations = new Set();
+    products.forEach((product) => {
+      if (product.location && typeof product.location === "string") {
+        locations.add(product.location);
+      }
+    });
+    // Sort alphabetically and filter to only include valid Nigerian states
+    return Array.from(locations)
+      .filter((loc) => NIGERIAN_STATES.includes(loc))
+      .sort();
+  }, [products]);
+
+  const availableLocations = getAvailableLocations();
+
   // FIXED: Separate filtering for main grid vs horizontal sections
   // This filters products for the MAIN GRID only
   const getFilteredProducts = useCallback(() => {
     let filtered = [...products];
+
+    // Apply location filter
+    if (selectedLocation !== "All") {
+      filtered = filtered.filter(
+        (product) => product.location === selectedLocation
+      );
+    }
 
     // Apply category filter
     if (selectedCategory !== "All") {
@@ -198,7 +263,14 @@ const MedicineHomepage = () => {
     }
 
     return filtered;
-  }, [products, selectedCategory, selectedBrand, searchQuery, selectedFilter]);
+  }, [
+    products,
+    selectedLocation,
+    selectedCategory,
+    selectedBrand,
+    searchQuery,
+    selectedFilter,
+  ]);
 
   // NEW: Separate functions for horizontal sections
   const getSalesProducts = useCallback(() => {
@@ -230,7 +302,13 @@ const MedicineHomepage = () => {
       // If already on page 1, just refetch
       fetchProducts(1, itemsPerPage);
     }
-  }, [searchQuery, selectedCategory, selectedBrand, selectedFilter]);
+  }, [
+    searchQuery,
+    selectedCategory,
+    selectedBrand,
+    selectedFilter,
+    selectedLocation,
+  ]);
 
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= (productsMeta.totalPages || 1)) {
@@ -244,9 +322,7 @@ const MedicineHomepage = () => {
 
   const formatPrice = (price) => {
     return `₦${price.toLocaleString()}`;
-  };
-
-  // Get user account tier
+  }; // Get user account tier
   const getUserTier = () => {
     if (!user) return null;
     const tier = user.account_tier || user.type || user.buyer_type;
@@ -430,9 +506,7 @@ const MedicineHomepage = () => {
     if (categoriesError) fetchCategories();
     if (productsError) fetchProducts(currentPage, itemsPerPage);
     if (brandsError) fetchBrands();
-  };
-
-  // Loading State
+  }; // Loading State
   if (isLoadingCategories || isLoadingProducts || isLoadingBrands) {
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
@@ -518,6 +592,80 @@ const MedicineHomepage = () => {
         </View>
       </View>
 
+      {/* Location Filter */}
+      {availableLocations.length > 0 && (
+        <View style={styles.locationFilterContainer}>
+          <TouchableOpacity
+            style={styles.locationSelector}
+            onPress={() => setShowLocationDropdown(!showLocationDropdown)}
+          >
+            <MapPin size={16} color="#50C878" />
+            <Text style={styles.locationText}>
+              {selectedLocation === "All" ? "All Locations" : selectedLocation}
+            </Text>
+            <ChevronDown size={16} color="#666" />
+          </TouchableOpacity>
+
+          {showLocationDropdown && (
+            <View style={styles.locationDropdown}>
+              <ScrollView style={styles.locationDropdownScroll}>
+                <TouchableOpacity
+                  style={[
+                    styles.locationOption,
+                    selectedLocation === "All" && styles.locationOptionActive,
+                  ]}
+                  onPress={() => {
+                    setSelectedLocation("All");
+                    setShowLocationDropdown(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.locationOptionText,
+                      selectedLocation === "All" &&
+                        styles.locationOptionTextActive,
+                    ]}
+                  >
+                    All Locations
+                  </Text>
+                  {selectedLocation === "All" && (
+                    <View style={styles.locationCheckmark} />
+                  )}
+                </TouchableOpacity>
+
+                {availableLocations.map((location) => (
+                  <TouchableOpacity
+                    key={location}
+                    style={[
+                      styles.locationOption,
+                      selectedLocation === location &&
+                        styles.locationOptionActive,
+                    ]}
+                    onPress={() => {
+                      setSelectedLocation(location);
+                      setShowLocationDropdown(false);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.locationOptionText,
+                        selectedLocation === location &&
+                          styles.locationOptionTextActive,
+                      ]}
+                    >
+                      {location}
+                    </Text>
+                    {selectedLocation === location && (
+                      <View style={styles.locationCheckmark} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+        </View>
+      )}
+
       {/* Filter Tabs */}
       <View style={styles.filterTabsContainer}>
         <ScrollView
@@ -550,7 +698,6 @@ const MedicineHomepage = () => {
           ))}
         </ScrollView>
       </View>
-
       <ScrollView
         ref={scrollViewRef}
         showsVerticalScrollIndicator={false}
@@ -710,6 +857,7 @@ const MedicineHomepage = () => {
               </View>
             </View>
           )}
+
         {/* Sales Products Section - Only show on Home tab */}
         {!searchQuery.trim() &&
           !selectedBrand &&
@@ -771,31 +919,24 @@ const MedicineHomepage = () => {
                               </Text>
                             </View>
                           )}
-                        {product.originalPrice && product.discount > 0 && (
-                          <View style={styles.discountBadge}>
-                            <Text style={styles.discountText}>
-                              {Math.round(product.discount)}%
-                            </Text>
-                          </View>
-                        )}
+                        {product.originalPrice &&
+                          product.originalPrice > product.price && (
+                            <View style={styles.discountBadge}>
+                              <Text style={styles.discountText}>
+                                {Math.round(
+                                  (1 - product.price / product.originalPrice) *
+                                    100
+                                )}
+                                %
+                              </Text>
+                            </View>
+                          )}
                       </View>
 
                       <View style={styles.horizontalProductInfo}>
                         <Text style={styles.productName} numberOfLines={2}>
                           {product.name}
                         </Text>
-
-                        {product.rating && product.reviews > 0 && (
-                          <View style={styles.ratingRow}>
-                            <Star size={12} color="#FFB800" fill="#FFB800" />
-                            <Text style={styles.ratingText}>
-                              {product.rating}
-                            </Text>
-                            <Text style={styles.reviewsText}>
-                              ({product.reviews})
-                            </Text>
-                          </View>
-                        )}
 
                         <View style={styles.priceRow}>
                           <Text style={styles.price}>
@@ -935,31 +1076,24 @@ const MedicineHomepage = () => {
                               </Text>
                             </View>
                           )}
-                        {product.originalPrice && product.discount > 0 && (
-                          <View style={styles.discountBadge}>
-                            <Text style={styles.discountText}>
-                              {Math.round(product.discount)}%
-                            </Text>
-                          </View>
-                        )}
+                        {product.originalPrice &&
+                          product.originalPrice > product.price && (
+                            <View style={styles.discountBadge}>
+                              <Text style={styles.discountText}>
+                                {Math.round(
+                                  (1 - product.price / product.originalPrice) *
+                                    100
+                                )}
+                                %
+                              </Text>
+                            </View>
+                          )}
                       </View>
 
                       <View style={styles.horizontalProductInfo}>
                         <Text style={styles.productName} numberOfLines={2}>
                           {product.name}
                         </Text>
-
-                        {product.rating && product.reviews > 0 && (
-                          <View style={styles.ratingRow}>
-                            <Star size={12} color="#FFB800" fill="#FFB800" />
-                            <Text style={styles.ratingText}>
-                              {product.rating}
-                            </Text>
-                            <Text style={styles.reviewsText}>
-                              ({product.reviews})
-                            </Text>
-                          </View>
-                        )}
 
                         <View style={styles.priceRow}>
                           <Text style={styles.price}>
@@ -1038,7 +1172,6 @@ const MedicineHomepage = () => {
               </ScrollView>
             </View>
           )}
-
         {/* Products Section */}
         <View style={styles.productsSection}>
           <View style={styles.productsHeader}>
@@ -1059,10 +1192,14 @@ const MedicineHomepage = () => {
             </Text>
             <Text style={styles.productsCount}>
               {productsMeta.total}
-              {productsMeta.total === 1 ? "product" : "products"}
+              {productsMeta.total === 1 ? " product" : " products"}
               {productsMeta.totalPages > 1 && (
                 <Text style={styles.paginationInfo}>
-                  (Page {productsMeta.page} of {productsMeta.totalPages})
+                  {" (Page " +
+                    productsMeta.page +
+                    " of " +
+                    productsMeta.totalPages +
+                    ")"}
                 </Text>
               )}
             </Text>
@@ -1126,31 +1263,24 @@ const MedicineHomepage = () => {
                               </Text>
                             </View>
                           )}
-                        {product.originalPrice && product.discount > 0 && (
-                          <View style={styles.discountBadge}>
-                            <Text style={styles.discountText}>
-                              {Math.round(product.discount)}%
-                            </Text>
-                          </View>
-                        )}
+                        {product.originalPrice &&
+                          product.originalPrice > product.price && (
+                            <View style={styles.discountBadge}>
+                              <Text style={styles.discountText}>
+                                {Math.round(
+                                  (1 - product.price / product.originalPrice) *
+                                    100
+                                )}
+                                %
+                              </Text>
+                            </View>
+                          )}
                       </View>
 
                       <View style={styles.productInfo}>
                         <Text style={styles.productName} numberOfLines={2}>
                           {product.name}
                         </Text>
-
-                        {product.rating && product.reviews > 0 && (
-                          <View style={styles.ratingRow}>
-                            <Star size={12} color="#FFB800" fill="#FFB800" />
-                            <Text style={styles.ratingText}>
-                              {product.rating}
-                            </Text>
-                            <Text style={styles.reviewsText}>
-                              ({product.reviews})
-                            </Text>
-                          </View>
-                        )}
 
                         <View style={styles.priceRow}>
                           <Text style={styles.price}>
@@ -1346,6 +1476,7 @@ const MedicineHomepage = () => {
   );
 };
 
+// STYLES CONTINUE IN NEXT MESSAGE DUE TO LENGTH
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1465,6 +1596,72 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 14,
     color: "#000",
+  },
+  locationFilterContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    backgroundColor: "#fff",
+    position: "relative",
+    zIndex: 1000,
+  },
+  locationSelector: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F5F5F5",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  locationText: {
+    flex: 1,
+    fontSize: 14,
+    color: "#000",
+    fontWeight: "500",
+  },
+  locationDropdown: {
+    position: "absolute",
+    top: 60,
+    left: 16,
+    right: 16,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
+    maxHeight: 300,
+    zIndex: 2000,
+  },
+  locationDropdownScroll: {
+    maxHeight: 300,
+  },
+  locationOption: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  locationOptionActive: {
+    backgroundColor: "#f0fdf4",
+  },
+  locationOptionText: {
+    fontSize: 14,
+    color: "#333",
+  },
+  locationOptionTextActive: {
+    color: "#50C878",
+    fontWeight: "600",
+  },
+  locationCheckmark: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#50C878",
   },
   filterTabsContainer: {
     backgroundColor: "#fff",
@@ -1654,7 +1851,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 160,
   },
-
   outOfStockBadge: {
     position: "absolute",
     top: 8,
@@ -1709,21 +1905,6 @@ const styles = StyleSheet.create({
     color: "#000",
     marginBottom: 4,
     minHeight: 36,
-  },
-  ratingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginBottom: 6,
-  },
-  ratingText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#000",
-  },
-  reviewsText: {
-    fontSize: 12,
-    color: "#999",
   },
   priceRow: {
     flexDirection: "row",

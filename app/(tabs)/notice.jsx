@@ -254,7 +254,10 @@ const OrdersScreen = () => {
 
   const formatPrice = (price) => {
     const numericPrice = typeof price === "number" && !isNaN(price) ? price : 0;
-    return `₦${numericPrice.toLocaleString()}`;
+    return `₦${numericPrice.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
   };
 
   const formatDate = (dateString) => {
@@ -280,6 +283,9 @@ const OrdersScreen = () => {
   const handleContactUs = () => {
     setShowOrderModal(false);
     console.log("Navigate to Contact Us with order:", selectedOrder);
+  };
+  const calculateShipping = (subtotal) => {
+    return subtotal * 0.025; // 2.5% of subtotal
   };
 
   // Helper to get first image from item
@@ -469,7 +475,9 @@ const OrdersScreen = () => {
                     <View style={styles.orderFooter}>
                       <Text style={styles.totalLabel}>Total:</Text>
                       <Text style={styles.totalAmount}>
-                        {formatPrice(order.total)}
+                        {formatPrice(
+                          order.total + calculateShipping(order.total)
+                        )}
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -672,9 +680,9 @@ const OrdersScreen = () => {
                 {/* Order ID and Status */}
                 <View style={styles.orderModalSection}>
                   <View style={styles.orderModalRow}>
-                    <Text style={styles.orderModalLabel}>ORD-00</Text>
+                    <Text style={styles.orderModalLabel}>Order Number</Text>
                     <Text style={styles.orderModalValue}>
-                      {selectedOrder.orderNumber}
+                      00{selectedOrder.orderNumber}
                     </Text>
                   </View>
                   <View style={styles.orderModalRow}>
@@ -808,14 +816,19 @@ const OrdersScreen = () => {
                     </Text>
                   </View>
                   <View style={styles.orderModalRow}>
-                    <Text style={styles.orderModalLabel}>Shipping</Text>
-                    <Text style={styles.orderModalValue}>Free</Text>
+                    <Text style={styles.orderModalLabel}>Shipping (2.5%)</Text>
+                    <Text style={styles.orderModalValue}>
+                      {formatPrice(calculateShipping(selectedOrder.total))}
+                    </Text>
                   </View>
                   <View style={styles.divider} />
                   <View style={styles.orderModalRow}>
                     <Text style={styles.orderModalLabelBold}>Total</Text>
                     <Text style={styles.orderModalTotalValue}>
-                      {formatPrice(selectedOrder.total)}
+                      {formatPrice(
+                        selectedOrder.total +
+                          calculateShipping(selectedOrder.total)
+                      )}
                     </Text>
                   </View>
                 </View>
