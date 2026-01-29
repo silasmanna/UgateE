@@ -161,7 +161,7 @@ const AccountUpgradeScreen = () => {
       }
 
       const response = await fetch(
-        "https://api-dev.allwecure.com/buyers/account/upgrade",
+        "https://api.allwecure.com/buyers/account/upgrade",
         {
           method: "PATCH",
           headers: {
