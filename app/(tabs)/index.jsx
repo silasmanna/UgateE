@@ -33,6 +33,7 @@ import { useCart } from "../../contexts/cartContext";
 
 const MedicineHomepage = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(""); // ADDED FOR DEBOUNCING
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState("All");
@@ -125,7 +126,9 @@ const MedicineHomepage = () => {
     fetchBrands,
   } = useAuth();
 
-  const pathname = usePathname(); // Handle back button press - ONLY when on home screen
+  const pathname = usePathname();
+
+  // Handle back button press - ONLY when on home screen
   useFocusEffect(
     useCallback(() => {
       const backAction = () => {
@@ -146,12 +149,12 @@ const MedicineHomepage = () => {
 
       const backHandler = BackHandler.addEventListener(
         "hardwareBackPress",
-        backAction
+        backAction,
       );
 
       // Cleanup on unmount or when screen loses focus
       return () => backHandler.remove();
-    }, [pathname])
+    }, [pathname]),
   );
 
   const handleExitApp = () => {
@@ -181,6 +184,15 @@ const MedicineHomepage = () => {
     fetchProducts(currentPage, itemsPerPage);
   }, [currentPage]);
 
+  // DEBOUNCE EFFECT - Wait for user to stop typing before filtering
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 500); // 500ms delay
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   // Get available locations from products
   const getAvailableLocations = useCallback(() => {
     const locations = new Set();
@@ -205,14 +217,14 @@ const MedicineHomepage = () => {
     // Apply location filter
     if (selectedLocation !== "All") {
       filtered = filtered.filter(
-        (product) => product.location === selectedLocation
+        (product) => product.location === selectedLocation,
       );
     }
 
     // Apply category filter
     if (selectedCategory !== "All") {
       filtered = filtered.filter(
-        (product) => product.category === selectedCategory
+        (product) => product.category === selectedCategory,
       );
     }
 
@@ -221,14 +233,16 @@ const MedicineHomepage = () => {
       filtered = filtered.filter(
         (product) =>
           product.brand &&
-          product.brand.toLowerCase() === selectedBrand.name.toLowerCase()
+          product.brand.toLowerCase() === selectedBrand.name.toLowerCase(),
       );
     }
 
-    // Apply search filter
-    if (searchQuery.trim()) {
+    // Apply search filter - USING DEBOUNCED VERSION
+    if (debouncedSearchQuery.trim()) {
       filtered = filtered.filter((product) =>
-        product.name.toLowerCase().includes(searchQuery.toLowerCase().trim())
+        product.name
+          .toLowerCase()
+          .includes(debouncedSearchQuery.toLowerCase().trim()),
       );
     }
 
@@ -268,7 +282,7 @@ const MedicineHomepage = () => {
     selectedLocation,
     selectedCategory,
     selectedBrand,
-    searchQuery,
+    debouncedSearchQuery, // CHANGED from searchQuery
     selectedFilter,
   ]);
 
@@ -303,7 +317,7 @@ const MedicineHomepage = () => {
       fetchProducts(1, itemsPerPage);
     }
   }, [
-    searchQuery,
+    debouncedSearchQuery, // CHANGED from searchQuery
     selectedCategory,
     selectedBrand,
     selectedFilter,
@@ -322,7 +336,8 @@ const MedicineHomepage = () => {
 
   const formatPrice = (price) => {
     return `₦${price.toLocaleString()}`;
-  }; // Get user account tier
+  };
+  // Get user account tier
   const getUserTier = () => {
     if (!user) return null;
     const tier = user.account_tier || user.type || user.buyer_type;
@@ -443,7 +458,7 @@ const MedicineHomepage = () => {
               text: "Login",
               onPress: () => router.push("/login"),
             },
-          ]
+          ],
         );
         return;
       }
@@ -458,7 +473,7 @@ const MedicineHomepage = () => {
               text: "Upgrade",
               onPress: () => router.push("/upgrade"),
             },
-          ]
+          ],
         );
         return;
       }
@@ -473,7 +488,7 @@ const MedicineHomepage = () => {
               text: "Upgrade",
               onPress: () => router.push("/upgrade"),
             },
-          ]
+          ],
         );
         return;
       }
@@ -489,7 +504,7 @@ const MedicineHomepage = () => {
         setAddingProductId(null);
       }, 100);
     },
-    [addToCart, user]
+    [addToCart, user],
   );
 
   const handleBrandPress = (brand) => {
@@ -506,7 +521,9 @@ const MedicineHomepage = () => {
     if (categoriesError) fetchCategories();
     if (productsError) fetchProducts(currentPage, itemsPerPage);
     if (brandsError) fetchBrands();
-  }; // Loading State
+  };
+
+  // Loading State
   if (isLoadingCategories || isLoadingProducts || isLoadingBrands) {
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
@@ -722,7 +739,7 @@ const MedicineHomepage = () => {
         )}
 
         {/* Brands Section - Only show when Brand filter is active and no specific brand selected */}
-        {!searchQuery.trim() &&
+        {!debouncedSearchQuery.trim() &&
           selectedFilter === "Brand" &&
           !selectedBrand &&
           brands.length > 0 && (
@@ -787,20 +804,20 @@ const MedicineHomepage = () => {
           )}
 
         {/* Search Results Info */}
-        {searchQuery.trim() && (
+        {debouncedSearchQuery.trim() && (
           <View style={styles.searchResultsInfo}>
             <Text style={styles.searchResultsText}>
               {filteredProducts.length === 0
-                ? `No results found for "${searchQuery}"`
+                ? `No results found for "${debouncedSearchQuery}"`
                 : `Showing ${filteredProducts.length} result${
                     filteredProducts.length === 1 ? "" : "s"
-                  } for "${searchQuery}"`}
+                  } for "${debouncedSearchQuery}"`}
             </Text>
           </View>
         )}
 
         {/* Categories Section */}
-        {!searchQuery.trim() &&
+        {!debouncedSearchQuery.trim() &&
           selectedFilter === "Home" &&
           !selectedBrand &&
           categories.length > 0 && (
@@ -859,7 +876,7 @@ const MedicineHomepage = () => {
           )}
 
         {/* Sales Products Section - Only show on Home tab */}
-        {!searchQuery.trim() &&
+        {!debouncedSearchQuery.trim() &&
           !selectedBrand &&
           selectedFilter === "Home" &&
           salesProducts.length > 0 && (
@@ -925,7 +942,7 @@ const MedicineHomepage = () => {
                               <Text style={styles.discountText}>
                                 {Math.round(
                                   (1 - product.price / product.originalPrice) *
-                                    100
+                                    100,
                                 )}
                                 %
                               </Text>
@@ -1017,7 +1034,7 @@ const MedicineHomepage = () => {
           )}
 
         {/* Popular Products Section - Only show on Home tab */}
-        {!searchQuery.trim() &&
+        {!debouncedSearchQuery.trim() &&
           !selectedBrand &&
           selectedFilter === "Home" &&
           popularProducts.length > 0 && (
@@ -1082,7 +1099,7 @@ const MedicineHomepage = () => {
                               <Text style={styles.discountText}>
                                 {Math.round(
                                   (1 - product.price / product.originalPrice) *
-                                    100
+                                    100,
                                 )}
                                 %
                               </Text>
@@ -1172,23 +1189,24 @@ const MedicineHomepage = () => {
               </ScrollView>
             </View>
           )}
+
         {/* Products Section */}
         <View style={styles.productsSection}>
           <View style={styles.productsHeader}>
             <Text style={styles.sectionTitle}>
-              {searchQuery.trim()
+              {debouncedSearchQuery.trim()
                 ? "Search Results"
                 : selectedBrand
-                ? `${selectedBrand.name} Products`
-                : selectedFilter === "Popular"
-                ? "Popular"
-                : selectedFilter === "Sales"
-                ? "Sales"
-                : selectedFilter === "Brand"
-                ? "All Brands"
-                : selectedCategory === "All"
-                ? "All Products"
-                : selectedCategory}
+                  ? `${selectedBrand.name} Products`
+                  : selectedFilter === "Popular"
+                    ? "Popular"
+                    : selectedFilter === "Sales"
+                      ? "Sales"
+                      : selectedFilter === "Brand"
+                        ? "All Brands"
+                        : selectedCategory === "All"
+                          ? "All Products"
+                          : selectedCategory}
             </Text>
             <Text style={styles.productsCount}>
               {productsMeta.total}
@@ -1208,11 +1226,11 @@ const MedicineHomepage = () => {
           {filteredProducts.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateText}>
-                {searchQuery.trim()
-                  ? `No products found matching "${searchQuery}"`
+                {debouncedSearchQuery.trim()
+                  ? `No products found matching "${debouncedSearchQuery}"`
                   : "No products found in this category"}
               </Text>
-              {searchQuery.trim() && (
+              {debouncedSearchQuery.trim() && (
                 <TouchableOpacity
                   style={styles.clearSearchButton}
                   onPress={handleClearSearch}
@@ -1269,7 +1287,7 @@ const MedicineHomepage = () => {
                               <Text style={styles.discountText}>
                                 {Math.round(
                                   (1 - product.price / product.originalPrice) *
-                                    100
+                                    100,
                                 )}
                                 %
                               </Text>
@@ -1383,7 +1401,7 @@ const MedicineHomepage = () => {
                   <View style={styles.pageNumbers}>
                     {Array.from(
                       { length: productsMeta.totalPages },
-                      (_, index) => index + 1
+                      (_, index) => index + 1,
                     ).map((page) => {
                       if (
                         page === 1 ||
@@ -1475,8 +1493,6 @@ const MedicineHomepage = () => {
     </SafeAreaView>
   );
 };
-
-// STYLES CONTINUE IN NEXT MESSAGE DUE TO LENGTH
 const styles = StyleSheet.create({
   container: {
     flex: 1,
