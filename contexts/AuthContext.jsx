@@ -217,7 +217,7 @@ export function AuthProvider({ children }) {
       console.log("🔄 Refreshing access token...");
       console.log(
         "🔑 Using refresh token:",
-        refreshToken.substring(0, 20) + "..."
+        refreshToken.substring(0, 20) + "...",
       );
 
       const response = await fetch(REFRESH_TOKEN_URL, {
@@ -241,7 +241,7 @@ export function AuthProvider({ children }) {
 
       if (!newAccessToken || !newRefreshToken) {
         throw new Error(
-          "Refresh successful, but new tokens were not received."
+          "Refresh successful, but new tokens were not received.",
         );
       }
 
@@ -303,7 +303,7 @@ export function AuthProvider({ children }) {
         }
 
         appState.current = nextAppState;
-      }
+      },
     );
 
     return () => {
@@ -324,15 +324,15 @@ export function AuthProvider({ children }) {
 
         console.log(
           "📱 Stored access token:",
-          storedAccessToken ? "✅ found" : "❌ not found"
+          storedAccessToken ? "✅ found" : "❌ not found",
         );
         console.log(
           "📱 Stored refresh token:",
-          storedRefreshToken ? "✅ found" : "❌ not found"
+          storedRefreshToken ? "✅ found" : "❌ not found",
         );
         console.log(
           "📱 Stored user data:",
-          storedUserData ? "✅ found" : "❌ not found"
+          storedUserData ? "✅ found" : "❌ not found",
         );
 
         // If no tokens or user data, user is not logged in
@@ -566,7 +566,7 @@ export function AuthProvider({ children }) {
 
   // Fetch Products (Requires auth)
 
-  const fetchProducts = async (page = 1, limit = 20) => {
+  const fetchProducts = async (page = 1, limit = 20, searchQuery = "") => {
     try {
       setIsLoadingProducts(true);
       setProductsError(null);
@@ -577,17 +577,22 @@ export function AuthProvider({ children }) {
         throw new Error("No access token available");
       }
 
-      console.log(`🛍️ Fetching products (page ${page}, limit ${limit})...`);
-      let response = await fetch(
-        `${PRODUCTS_URL}?page=${page}&limit=${limit}`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`,
-          },
-        }
+      // Build URL with search parameter
+      let url = `${PRODUCTS_URL}?page=${page}&limit=${limit}`;
+      if (searchQuery && searchQuery.trim()) {
+        url += `&search=${encodeURIComponent(searchQuery.trim())}`;
+      }
+
+      console.log(
+        `🛍️ Fetching products (page ${page}, limit ${limit}, search: "${searchQuery}")...`,
       );
+      let response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
 
       // Handle token refresh if needed
       if (response.status === 401) {
@@ -595,7 +600,7 @@ export function AuthProvider({ children }) {
         const newAccessToken = await refreshAccessToken();
 
         // Retry with new token
-        response = await fetch(`${PRODUCTS_URL}?page=${page}&limit=${limit}`, {
+        response = await fetch(url, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -643,8 +648,8 @@ export function AuthProvider({ children }) {
             product.image_url && Array.isArray(product.image_url)
               ? product.image_url
               : product.image_url && product.image_url[0]
-              ? [product.image_url[0]]
-              : [],
+                ? [product.image_url[0]]
+                : [],
           inStock: product.inStock,
           stockCount: product.stockCount,
           sold: product.sold || 0,
@@ -678,7 +683,7 @@ export function AuthProvider({ children }) {
       });
 
       console.log(
-        `✅ Fetched ${transformedProducts.length} products (Page ${result.meta.page} of ${result.meta.totalPages})`
+        `✅ Fetched ${transformedProducts.length} products (Page ${result.meta.page} of ${result.meta.totalPages})`,
       );
       return { products: transformedProducts, meta: result.meta };
     } catch (error) {
@@ -765,8 +770,8 @@ export function AuthProvider({ children }) {
           product.image_url && Array.isArray(product.image_url)
             ? product.image_url
             : product.image_url && product.image_url[0]
-            ? [product.image_url[0]]
-            : [],
+              ? [product.image_url[0]]
+              : [],
         inStock: product.inStock,
         stockCount: product.stockCount,
         sold: product.sold,
@@ -845,7 +850,7 @@ export function AuthProvider({ children }) {
       if (!Array.isArray(apiOrders)) {
         console.warn(
           "API response structure unexpected: 'orders' is not an array.",
-          result
+          result,
         );
         setOrders([]);
         return [];
@@ -957,15 +962,15 @@ export function AuthProvider({ children }) {
 
       console.log(
         "📱 Stored access token:",
-        accessToken ? "✅ found" : "❌ not found"
+        accessToken ? "✅ found" : "❌ not found",
       );
       console.log(
         "📱 Stored refresh token:",
-        refreshToken ? "✅ found" : "❌ not found"
+        refreshToken ? "✅ found" : "❌ not found",
       );
       console.log(
         "📱 Stored user data:",
-        userData ? "✅ found" : "❌ not found"
+        userData ? "✅ found" : "❌ not found",
       );
 
       // If no tokens or user data, user is not logged in
@@ -1077,7 +1082,7 @@ export function AuthProvider({ children }) {
 
       // Validate cart items structure
       const invalidItems = cartItems.filter(
-        (item) => !item.id || !item.quantity || item.quantity <= 0
+        (item) => !item.id || !item.quantity || item.quantity <= 0,
       );
 
       if (invalidItems.length > 0) {
@@ -1122,7 +1127,7 @@ export function AuthProvider({ children }) {
           const result = await performCheckoutRequest(
             checkoutData,
             accessToken,
-            TIMEOUT_MS
+            TIMEOUT_MS,
           );
 
           console.log("✅ Checkout successful");
@@ -1163,13 +1168,13 @@ export function AuthProvider({ children }) {
         error.name === "TypeError"
       ) {
         throw new Error(
-          "Network error. Please check your internet connection and try again."
+          "Network error. Please check your internet connection and try again.",
         );
       }
 
       if (error.name === "AbortError" || error.message.includes("timeout")) {
         throw new Error(
-          "Request timed out. Please check your connection and try again."
+          "Request timed out. Please check your connection and try again.",
         );
       }
 
@@ -1182,7 +1187,7 @@ export function AuthProvider({ children }) {
   const performCheckoutRequest = async (
     checkoutData,
     accessToken,
-    timeoutMs
+    timeoutMs,
   ) => {
     // Create abort controller for timeout
     const controller = new AbortController();
@@ -1208,7 +1213,7 @@ export function AuthProvider({ children }) {
 
         if (!newAccessToken) {
           const error = new Error(
-            "Authentication required. Please log in again."
+            "Authentication required. Please log in again.",
           );
           error.status = 401;
           throw error;
@@ -1259,7 +1264,7 @@ export function AuthProvider({ children }) {
       // Validate response structure
       if (result.success === false) {
         const error = new Error(
-          result.message || "Checkout was not successful"
+          result.message || "Checkout was not successful",
         );
         error.status = response.status;
         throw error;
@@ -1268,7 +1273,7 @@ export function AuthProvider({ children }) {
       // If success field doesn't exist but response is ok, assume success
       if (result.success === undefined) {
         console.log(
-          "⚠️ Response doesn't have 'success' field, assuming success based on HTTP status"
+          "⚠️ Response doesn't have 'success' field, assuming success based on HTTP status",
         );
         result.success = true;
       }
@@ -1358,7 +1363,7 @@ export function AuthProvider({ children }) {
         });
 
         throw new Error(
-          "Email not verified. Please verify your email to continue."
+          "Email not verified. Please verify your email to continue.",
         );
       }
 
@@ -1376,11 +1381,11 @@ export function AuthProvider({ children }) {
 
       console.log(
         "🔑 Access token:",
-        accessToken ? "✅ received" : "❌ missing"
+        accessToken ? "✅ received" : "❌ missing",
       );
       console.log(
         "🔑 Refresh token:",
-        refreshToken ? "✅ received" : "❌ missing"
+        refreshToken ? "✅ received" : "❌ missing",
       );
 
       if (!accessToken || !refreshToken) {
@@ -1516,7 +1521,7 @@ export function AuthProvider({ children }) {
 
           console.log(
             "📊 Profile response status after refresh:",
-            response.status
+            response.status,
           );
           accessToken = newAccessToken;
         } catch (refreshError) {
@@ -1534,7 +1539,7 @@ export function AuthProvider({ children }) {
       const profileData = await response.json();
       console.log(
         "👤 Profile data received:",
-        JSON.stringify(profileData, null, 2)
+        JSON.stringify(profileData, null, 2),
       );
 
       // Check if the response has the expected structure
@@ -1637,7 +1642,7 @@ export function AuthProvider({ children }) {
         console.error("❌ Error name:", fetchError.name);
         console.error("❌ Error message:", fetchError.message);
         throw new Error(
-          "Network request failed. Please check your internet connection and try again."
+          "Network request failed. Please check your internet connection and try again.",
         );
       }
 
@@ -1708,7 +1713,7 @@ export function AuthProvider({ children }) {
 
       if (!accessToken || !refreshToken) {
         throw new Error(
-          "Verification successful, but tokens were not received."
+          "Verification successful, but tokens were not received.",
         );
       }
 
@@ -1824,7 +1829,7 @@ export function AuthProvider({ children }) {
       const result = await response.json();
       console.log(
         "📦 Forgot password response:",
-        JSON.stringify(result, null, 2)
+        JSON.stringify(result, null, 2),
       );
 
       if (!response.ok || !result.success) {
@@ -1862,7 +1867,7 @@ export function AuthProvider({ children }) {
       const result = await response.json();
       console.log(
         "📦 Reset password response:",
-        JSON.stringify(result, null, 2)
+        JSON.stringify(result, null, 2),
       );
 
       if (!response.ok || !result.success) {
@@ -1924,7 +1929,7 @@ export function AuthProvider({ children }) {
       const result = await response.json();
       console.log(
         "📦 Change password response:",
-        JSON.stringify(result, null, 2)
+        JSON.stringify(result, null, 2),
       );
 
       if (!response.ok || !result.success) {

@@ -33,7 +33,7 @@ import { useCart } from "../../contexts/cartContext";
 
 const MedicineHomepage = () => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(""); // ADDED FOR DEBOUNCING
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState("All");
@@ -172,7 +172,7 @@ const MedicineHomepage = () => {
       fetchCategories();
     }
     if (products.length === 0 && !isLoadingProducts && !productsError) {
-      fetchProducts(1, itemsPerPage);
+      fetchProducts(1, itemsPerPage, ""); // Empty search on initial load
     }
     if (brands.length === 0 && !isLoadingBrands && !brandsError) {
       fetchBrands();
@@ -181,14 +181,14 @@ const MedicineHomepage = () => {
 
   // Fetch products when page changes
   useEffect(() => {
-    fetchProducts(currentPage, itemsPerPage);
+    fetchProducts(currentPage, itemsPerPage, debouncedSearchQuery);
   }, [currentPage]);
 
-  // DEBOUNCE EFFECT - Wait for user to stop typing before filtering
+  // DEBOUNCE EFFECT - Wait for user to stop typing before searching
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearchQuery(searchQuery);
-    }, 500); // 500ms delay
+    }, 1300); // 1.3s delay
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
@@ -209,8 +209,8 @@ const MedicineHomepage = () => {
 
   const availableLocations = getAvailableLocations();
 
-  // FIXED: Separate filtering for main grid vs horizontal sections
-  // This filters products for the MAIN GRID only
+  // Filter products for MAIN GRID (client-side filtering for location, category, brand, filters)
+  // Search is now handled server-side via API
   const getFilteredProducts = useCallback(() => {
     let filtered = [...products];
 
@@ -237,14 +237,7 @@ const MedicineHomepage = () => {
       );
     }
 
-    // Apply search filter - USING DEBOUNCED VERSION
-    if (debouncedSearchQuery.trim()) {
-      filtered = filtered.filter((product) =>
-        product.name
-          .toLowerCase()
-          .includes(debouncedSearchQuery.toLowerCase().trim()),
-      );
-    }
+    // Search is now handled by the backend API, not here
 
     // Apply filter based on selected tab
     if (selectedFilter === "Sales") {
@@ -282,11 +275,10 @@ const MedicineHomepage = () => {
     selectedLocation,
     selectedCategory,
     selectedBrand,
-    debouncedSearchQuery, // CHANGED from searchQuery
     selectedFilter,
   ]);
 
-  // NEW: Separate functions for horizontal sections
+  // Separate functions for horizontal sections
   const getSalesProducts = useCallback(() => {
     return products
       .filter((p) => p.discount && p.discount > 0)
@@ -308,16 +300,16 @@ const MedicineHomepage = () => {
     ? categories
     : categories.slice(0, 8);
 
-  // FIXED: Reset to page 1 when filters change and fetch new data
+  // Reset to page 1 when filters change and fetch new data
   useEffect(() => {
     if (currentPage !== 1) {
       setCurrentPage(1);
     } else {
-      // If already on page 1, just refetch
-      fetchProducts(1, itemsPerPage);
+      // If already on page 1, just refetch with search query
+      fetchProducts(1, itemsPerPage, debouncedSearchQuery);
     }
   }, [
-    debouncedSearchQuery, // CHANGED from searchQuery
+    debouncedSearchQuery, // Server-side search
     selectedCategory,
     selectedBrand,
     selectedFilter,
@@ -337,6 +329,7 @@ const MedicineHomepage = () => {
   const formatPrice = (price) => {
     return `₦${price.toLocaleString()}`;
   };
+
   // Get user account tier
   const getUserTier = () => {
     if (!user) return null;
@@ -407,7 +400,6 @@ const MedicineHomepage = () => {
 
     return null;
   };
-
   const handleCategoryPress = (categoryName) => {
     setIsCategoryLoading(true);
     setTimeout(() => {
@@ -519,7 +511,8 @@ const MedicineHomepage = () => {
 
   const handleRetry = () => {
     if (categoriesError) fetchCategories();
-    if (productsError) fetchProducts(currentPage, itemsPerPage);
+    if (productsError)
+      fetchProducts(currentPage, itemsPerPage, debouncedSearchQuery);
     if (brandsError) fetchBrands();
   };
 
@@ -807,10 +800,10 @@ const MedicineHomepage = () => {
         {debouncedSearchQuery.trim() && (
           <View style={styles.searchResultsInfo}>
             <Text style={styles.searchResultsText}>
-              {filteredProducts.length === 0
+              {productsMeta.total === 0
                 ? `No results found for "${debouncedSearchQuery}"`
-                : `Showing ${filteredProducts.length} result${
-                    filteredProducts.length === 1 ? "" : "s"
+                : `Showing ${productsMeta.total} result${
+                    productsMeta.total === 1 ? "" : "s"
                   } for "${debouncedSearchQuery}"`}
             </Text>
           </View>
